@@ -1,0 +1,11 @@
+{
+  "name": "mesa-t20",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Painel de mesa para Tormenta 20: PV de herois e inimigos, boss, efeitos e ordem de turno",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
