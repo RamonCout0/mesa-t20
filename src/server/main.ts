@@ -490,6 +490,38 @@ async function tratarFotoJogador(req: Req, res: Res, url: URL) {
   }
 }
 
+// Endereco que so existe dentro de casa ou da maquina: o link de foto nao pode apontar para la.
+const HOST_INTERNO = /^(localhost|.*\.local|.*\.localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.|0\.|\[?::1?\]?$|\[?f[cd]|\[?fe80)/i;
+
+/** Busca a foto de um link (ex.: "copiar endereço da imagem" no Fichas de Nimb) para o recortador. */
+async function tratarImagemLink(req: Req, res: Res, url: URL) {
+  if (!ehMestre(req, url) && !jogadorDe(req, url)) return responder(res, 401, { ok: false, erro: 'Código inválido.' });
+  try {
+    let alvo: URL;
+    try { alvo = new URL(url.searchParams.get('url') ?? ''); } catch { throw new Error('Link inválido.'); }
+    if (!/^https?:$/.test(alvo.protocol) || HOST_INTERNO.test(alvo.hostname)) throw new Error('Use o link de uma imagem da internet (https://…).');
+    let resp: Response;
+    try {
+      resp = await fetch(alvo, { redirect: 'follow', signal: AbortSignal.timeout(15_000), headers: { Accept: 'image/*', 'User-Agent': 'Mozilla/5.0 (mesa-t20)' } });
+    } catch {
+      throw new Error('Não consegui abrir esse link.');
+    }
+    if (HOST_INTERNO.test(new URL(resp.url).hostname)) throw new Error('Use o link de uma imagem da internet (https://…).');
+    if (!resp.ok) throw new Error(`O site respondeu ${resp.status}. Copie o endereço da imagem, não da página.`);
+    const tipo = String(resp.headers.get('content-type') ?? '').split(';')[0].trim();
+    const ext = EXT_DO_TIPO[tipo];
+    if (!ext || ext === '.svg') throw new Error('Esse link não é de uma foto. Clique com o botão direito na imagem e use "Copiar endereço da imagem".');
+    if (Number(resp.headers.get('content-length')) > LIMITE_IMAGEM) throw new Error('Imagem grande demais (máximo 25 MB).');
+    const dados = Buffer.from(await resp.arrayBuffer());
+    if (dados.length > LIMITE_IMAGEM) throw new Error('Imagem grande demais (máximo 25 MB).');
+    if (!pareceImagem(dados, ext)) throw new Error('Esse link não parece uma imagem.');
+    res.writeHead(200, { 'Content-Type': tipo, 'Cache-Control': 'no-store', ...CABECALHO_IMAGEM });
+    return res.end(dados);
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
 /** Acoes do mestre sobre as fichas. */
 async function tratarFichaMestre(req: Req, res: Res, url: URL) {
   if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
@@ -847,6 +879,7 @@ const servidor = http.createServer((req, res) => {
   if (rota === '/api/jogador/ficha') return tratarFichaJogador(req, res, url);
   if (rota === '/api/jogador/nova' && req.method === 'POST') return tratarNovaFichaJogador(req, res);
   if (rota === '/api/jogador/foto' && req.method === 'POST') return tratarFotoJogador(req, res, url);
+  if (rota === '/api/imagem-link') return tratarImagemLink(req, res, url);
   if (rota === '/api/jogador/acao' && req.method === 'POST') return tratarAcaoJogador(req, res, url);
   if (rota === '/api/mestre/ficha' && req.method === 'POST') return tratarFichaMestre(req, res, url);
   if (rota === '/api/mestre/bestiario' && req.method === 'POST') return tratarBestiario(req, res, url);

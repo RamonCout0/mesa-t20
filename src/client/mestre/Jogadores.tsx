@@ -7,6 +7,7 @@ import { enviarArquivo, postar } from '../comum/conexao.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { pin, usePainel } from './contexto.ts';
 import { EditorFicha } from '../comum/EditorFicha.tsx';
+import { Recortador } from '../comum/Recortador.tsx';
 import { baixarJson, nomeArquivo } from '../comum/arquivo.ts';
 import { Botao } from './Botao.tsx';
 
@@ -27,6 +28,8 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
     return r;
   };
   const fichaEditada = fichas.find((f) => f.id === editando);
+  const [fotoDe, setFotoDe] = useState<string | null>(null);
+  const fichaFoto = fichas.find((f) => f.id === fotoDe);
 
   const importar = async (arquivos: FileList) => {
     setEnviando(true);
@@ -126,7 +129,7 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
             const cd = cdMagia(f);
             return (
               <article key={f.id} className={`ficha-m ${heroi ? 'na-mesa' : ''}`} style={{ '--cor': f.cor } as CSSProperties}>
-                <Retrato ent={{ nome: f.nome, imagem: f.imagem }} />
+                <Retrato ent={{ nome: f.nome, imagem: f.imagem }} title="Trocar ou ajustar a foto" style={{ cursor: 'pointer' }} onClick={() => setFotoDe(f.id)} />
                 <div className="ficha-info">
                   <b>{f.nome}</b>
                   <small>{[f.classe, `Nível ${f.nivel}`, f.raca].filter(Boolean).join(' · ')}</small>
@@ -143,6 +146,7 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
                 </button>
                 <div className="ficha-acoes">
                   {heroi ? <span className="tag-m vez">Na mesa</span> : <Botao classe="pequeno ouro" icone="mais" texto="Pôr na mesa" onClick={() => acao({ acao: 'naMesa', id: f.id })} />}
+                  <Botao classe="pequeno" icone="imagem" texto="Foto" title="Trocar ou ajustar a foto (recortar, zoom, girar)" onClick={() => setFotoDe(f.id)} />
                   <Botao classe="pequeno" icone="editar" texto="Editar" title="Editar a ficha (homebrew, itens, magias próprias…)" onClick={() => setEditando(f.id)} />
                   <Botao classe="pequeno fantasma" icone="enviar" title="Baixar a ficha em arquivo (para guardar ou levar para outra mesa)" onClick={() => {
                     const { codigo: _c, ...semCodigo } = f;
@@ -186,6 +190,22 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
           salvar={async (patch) => {
             const r = await acao({ acao: 'editar', id: fichaEditada.id, patch });
             if (r.ok) avisar(`Ficha de ${fichaEditada.nome} salva.`, 'info');
+            return r.ok;
+          }}
+        />
+      ) : null}
+
+      {fichaFoto ? (
+        <Recortador
+          key={fichaFoto.id}
+          titulo={fichaFoto.nome}
+          atual={fichaFoto.imagem}
+          cabecalhos={{ 'x-pin': pin }}
+          fechar={() => setFotoDe(null)}
+          concluir={async (foto) => {
+            const r = await enviarArquivo('/api/jogador/foto', foto, { 'x-codigo': fichaFoto.codigo });
+            if (!r.ok) avisar(r.erro ?? 'Não consegui enviar a foto.');
+            else avisar(`Foto de ${fichaFoto.nome} atualizada.`, 'info');
             return r.ok;
           }}
         />

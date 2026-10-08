@@ -1,11 +1,12 @@
 // Aba "Carta": o personagem em formato de carta, mais foto, cor e modelo de dado.
-import { useRef, useState, type CSSProperties } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { cdMagia } from '../../shared/ficha.ts';
 import { DADOS_3D, type ModeloDado } from '../../shared/dados-3d.ts';
 import { ATRIBUTOS } from '../../shared/tipos.ts';
 import { enviarArquivo, postar } from '../comum/conexao.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { Icone } from '../comum/Icone.tsx';
+import { Recortador } from '../comum/Recortador.tsx';
 import type { PropsAba } from './Jogo.tsx';
 
 const SIGLA: Record<string, string> = { for: 'For', des: 'Des', con: 'Con', int: 'Int', sab: 'Sab', car: 'Car' };
@@ -26,8 +27,7 @@ export function amostraDado(m: ModeloDado): CSSProperties {
 }
 
 export function Carta({ ficha, heroi, codigo, avisar }: PropsAba) {
-  const foto = useRef<HTMLInputElement>(null);
-  const [enviando, setEnviando] = useState(false);
+  const [recortando, setRecortando] = useState(false);
   const cd = cdMagia(ficha);
 
   const salvar = async (patch: Record<string, unknown>) => {
@@ -35,12 +35,11 @@ export function Carta({ ficha, heroi, codigo, avisar }: PropsAba) {
     if (!r.ok) avisar(r.erro ?? 'Não consegui salvar.');
   };
 
-  const trocarFoto = async (f: File) => {
-    setEnviando(true);
+  const trocarFoto = async (f: Blob) => {
     const r = await enviarArquivo('/api/jogador/foto', f, { 'x-codigo': codigo });
-    setEnviando(false);
     if (!r.ok) avisar(r.erro ?? 'Não consegui enviar a foto.');
     else avisar('Foto atualizada no telão.', 'info');
+    return r.ok;
   };
 
   return (
@@ -52,10 +51,9 @@ export function Carta({ ficha, heroi, codigo, avisar }: PropsAba) {
         </div>
         <div className="arte">
           <Retrato ent={{ nome: ficha.nome, imagem: ficha.imagem || heroi?.imagem }} />
-          <button type="button" className="trocar" disabled={enviando} onClick={() => foto.current?.click()}>
-            <Icone nome="imagem" />{enviando ? 'Enviando…' : 'Trocar foto'}
+          <button type="button" className="trocar" onClick={() => setRecortando(true)}>
+            <Icone nome="imagem" />{ficha.imagem ? 'Ajustar foto' : 'Pôr foto'}
           </button>
-          <input ref={foto} type="file" accept="image/png,image/jpeg,image/webp,image/gif" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) trocarFoto(f); e.target.value = ''; }} />
         </div>
         <div className="placa">
           <h2>{ficha.nome}</h2>
@@ -68,6 +66,15 @@ export function Carta({ ficha, heroi, codigo, avisar }: PropsAba) {
           <div className="gema"><small>{cd ? 'CD' : 'Desl.'}</small><b>{cd ?? `${ficha.deslocamento}m`}</b></div>
         </div>
       </article>
+      {recortando ? (
+        <Recortador
+          titulo={ficha.nome}
+          atual={ficha.imagem || heroi?.imagem}
+          cabecalhos={{ 'x-codigo': codigo }}
+          fechar={() => setRecortando(false)}
+          concluir={trocarFoto}
+        />
+      ) : null}
 
       <div className="atributos">
         {ATRIBUTOS.map((a) => (

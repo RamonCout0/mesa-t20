@@ -244,3 +244,56 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .tomou-dano { animation: tremer 480ms ease-out; }
 .tomou-dano .retrato { filter: brightness(1.7) saturate(0.5) sepia(0.7) hue-rotate(-35deg); }
 .retrato { transition: filter 0.45s; }
+
+/* ---------- recorte da foto do personagem ---------- */
+
+.rc-fundo {
+  position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 16px;
+  background: rgba(5, 3, 10, 0.78); backdrop-filter: blur(4px); overscroll-behavior: contain;
+}
+.rc-janela {
+  display: grid; gap: 12px; width: min(420px, 100%); max-height: calc(100dvh - 32px); overflow-y: auto; padding: 16px;
+  border-radius: 20px; background: linear-gradient(180deg, #1e1629, #141019); color: var(--texto);
+  box-shadow: 0 0 0 1px rgba(232, 195, 122, 0.3), 0 40px 100px rgba(0, 0, 0, 0.8);
+}
+.rc-topo { display: flex; align-items: center; gap: 12px; }
+.rc-topo > div { flex: 1; min-width: 0; }
+.rc-topo small { font-size: 11px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--apagado); }
+.rc-topo h2 { margin: 2px 0 0; font: 700 20px var(--fonte-titulo); color: var(--ouro); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rc-x { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.06); color: var(--suave); cursor: pointer; }
+.rc-x .ico { width: 18px; height: 18px; }
+.rc-palco { position: relative; width: min(100%, 300px, 46dvh); justify-self: center; }
+.rc-quadro { position: relative; aspect-ratio: 3 / 4; border-radius: 14px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(255, 236, 190, 0.35), 0 6px 16px rgba(0, 0, 0, 0.5); }
+.rc-quadro canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.rc-quadro canvas:active { cursor: grabbing; }
+.rc-guia { /* o retrato usa "center top / cover": icones quadrados mostram o topo */
+  position: absolute; left: 0; top: 0; width: 100%; aspect-ratio: 1; border-radius: 50%; pointer-events: none;
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.7), 0 0 0 999px rgba(5, 3, 10, 0.28);
+}
+.rc-vazio {
+  display: grid; place-items: center; align-content: center; gap: 8px; width: 100%; aspect-ratio: 3 / 4; padding: 16px;
+  border: 2px dashed rgba(232, 195, 122, 0.4); border-radius: 14px; background: rgba(8, 5, 12, 0.5); color: var(--suave);
+  font: 500 13px var(--fonte); text-align: center; cursor: pointer;
+}
+.rc-vazio .ico { width: 40px; height: 40px; color: var(--ouro); }
+.rc-vazio b { color: var(--texto); font-size: 15px; }
+.rc-ocupado { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 14px; background: rgba(8, 5, 12, 0.7); font-weight: 600; }
+.rc-controles { display: flex; align-items: center; gap: 8px; }
+.rc-controles > .ico { width: 18px; height: 18px; color: var(--suave); flex: none; }
+.rc-controles input[type="range"] { flex: 1; min-width: 0; accent-color: var(--ouro); }
+.rc-dica { margin: 0; font-size: 12px; line-height: 1.45; color: var(--apagado); }
+.rc-link { display: flex; gap: 8px; }
+.rc-link input {
+  flex: 1; min-width: 0; height: 38px; padding: 0 11px; border-radius: 10px; border: 1px solid var(--linha-forte);
+  background: rgba(8, 5, 12, 0.6); color: var(--texto); font: 400 14px var(--fonte);
+}
+.rc-link input:focus { outline: none; border-color: rgba(232, 195, 122, 0.7); }
+.rc-erro { margin: 0; padding: 8px 12px; border-radius: 10px; background: color-mix(in srgb, var(--perigo) 18%, transparent); color: #ffd2d2; font-size: 13px; }
+.rc-rodape { display: flex; justify-content: flex-end; gap: 8px; }
+.rc-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 38px; height: 38px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.07); color: var(--texto); font: 600 13px var(--fonte); cursor: pointer;
+}
+.rc-btn .ico { width: 17px; height: 17px; }
+.rc-btn:disabled { opacity: 0.4; cursor: default; }
+.rc-btn.ouro { background: var(--grad-ouro); color: #1a1024; }
