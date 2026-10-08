@@ -1,59 +1,148 @@
 # Mesa T20
 
-Duas telas, um programa só, sem internet:
+Três telas, um programa só, sem internet (todo mundo no mesmo Wi-Fi):
 
 | Tela | Onde abrir |
 |------|-----------|
 | **Mestre** (você) | `http://localhost:8787/mestre` |
-| **Telão** (a outra tela, que todo mundo vê) | `http://<IP-do-mestre>:8787/telao?fundo=1` |
+| **Telão** (a tela que todo mundo vê) | `http://<IP-do-mestre>:8787/telao?fundo=1` |
+| **Celular** de cada jogador | `http://<IP-do-mestre>:8787/jogador` (ou o QR code da aba *Jogadores*) |
 
-O telão mostra os **6 heróis** (foto, PV, PM, condições) embaixo, o **boss no centro** com efeitos,
-os capangas nos lados e a **ordem de turno** no topo. Os jogadores só olham para ele.
+O telão mostra os heróis embaixo, o **boss no centro**, os capangas nos lados e a **ordem de turno** no topo.
+Os jogadores agem pelo celular: atacam, lançam magias e rolam dados. As regras são aplicadas sozinhas e
+o resultado aparece animado no telão.
 
 ## Ligar
 
-**Linux / macOS:** `./iniciar.sh` (precisa do Node.js 18+).
-**Windows:** dois cliques em `iniciar.bat`.
+**Linux / macOS:** `./iniciar.sh` · **Windows:** dois cliques em `iniciar.bat` (precisa do Node.js 22.18+).
 
-A janela mostra o endereço do telão para o outro aparelho (mesmo Wi-Fi). Se não abrir,
-libere a porta no firewall: `sudo ufw allow 8787/tcp`. No telão, `F` = tela cheia.
-Para usar no OBS, adicione `http://localhost:8787/telao` como fonte de navegador (fundo transparente).
+Na primeira vez ele instala as dependências e monta as telas (`npm install` e `npm run build`).
+A janela mostra os endereços para os outros aparelhos. Se não abrir, libere a porta no firewall:
+`sudo ufw allow 8787/tcp`. No telão, `F` = tela cheia e `B` = liga/desliga o fundo.
+Para o OBS, use `http://localhost:8787/telao` como fonte de navegador (fundo transparente).
+
+## Jogadores no celular
+
+1. Cada jogador exporta a ficha em PDF no **Fichas de Nimb** e abre o endereço do QR code da aba **Jogadores**.
+2. Ele importa o PDF ali mesmo (ou você importa pelo painel). A ficha fica salva em `data/fichas/` com um
+   **código de 6 letras**: o QR de cada personagem entra direto nele da próxima vez.
+3. **Pôr na mesa** coloca a carta do herói no telão.
+
+No celular: aba **Ações** (ataques da ficha, com alvo, bônus da situação e dano extra), **Magias**
+(as magias da ficha, com aprimoramentos, custo em PM e limite pelo nível), **Dados** (14 modelos de dado
+3D, perícias e rolagem livre — pode ser secreta), **Carta** (foto, cor e dado preferido) e **Mais**.
+O dado gira na mão do jogador; ele **arrasta para cima (ou toca)** para lançar, e o dado cai do alto na
+mesa do telão. O resumo aparece no celular quando o golpe chega no telão. O celular vibra na vez do
+jogador, quando ele leva dano e quando chega uma mensagem secreta.
+
+## Regras automáticas (Tormenta20)
+
+- **Ataque:** d20 + bônus contra a Defesa do alvo. Crítico só quando acerta e o d20 está na margem
+  (multiplica os dados, não os bônus). Animações diferentes para acerto, crítico e erro.
+- **Magias:** CD = 10 + ½ nível + atributo-chave. O alvo rola a resistência sozinho (metade, anula ou
+  parcial). PM gasto, limite de PM pelo nível e condições (com duração em rodadas) são aplicados.
+- **Dano:** RD (geral e por tipo), imunidade e vulnerabilidade. PV temporário sai primeiro. Herói em 0 PV
+  fica inconsciente e sangrando; morre no limite negativo (−10 ou −metade do PV máximo). Sangrando rola
+  Constituição CD 15 no início do turno (passa = estabiliza, falha = perde 1d6 PV).
+- **Regra da casa — ninguém morre direto** (ligada por padrão, aba Jogadores): o golpe que derruba o herói
+  para no 0; só os danos seguintes descem até o limite de morte.
+- **Poderes e itens:** o que tiver custo, efeito ou bônus aparece na aba **Ações** do celular. Usar gasta
+  PM (com o limite pelo nível), aplica o efeito e, se tiver bônus (ex.: Fúria +2 ataque e dano), fica ativo
+  na mesa — o bônus entra sozinho nos ataques e na Defesa até acabar.
+- **Iniciativa:** heróis rolam cada um; os inimigos fazem **um teste só, com o menor bônus** (regra do
+  livro — dá para desligar). Empate: maior bônus primeiro, depois heróis.
+- **Magias que ficam na mesa** (sustentadas, de cena, por rodadas): ficam no telão — aura no alvo, anel
+  em quem sustenta e um selo com o nome e quanto falta — até acabarem ou serem desfeitas. Quando acabam,
+  as condições que elas impuseram (ex.: *enredado* da Teia) saem junto. O jogador encerra pelo celular;
+  você encerra na faixa **Magias ativas** do painel.
+- Tudo cai no **Registro** (botão de lista no topo do painel), com cada dado e teste. **↶ Desfazer**
+  (`Ctrl+Z`) volta a última mudança, inclusive um ataque.
 
 ## No painel do mestre
 
-- **Dano / Cura:** digite o valor no cartão e clique (`Enter` = dano, `Shift+Enter` = cura).
-  O botão **⋯** abre os botões rápidos (−10 … +10), PV temporário, PM e condições de T20.
-- **Vários de uma vez:** clique na foto dos cartões para selecionar; aparece uma barra flutuante de dano/cura em área.
-- **Inimigos:** o PV é **escondido por padrão**. O menu de cada inimigo escolhe o que o telão mostra:
-  nada, só o estado ("Ferido"…), só a barra ou o número. O botão do **olho** mostra/esconde o inimigo no telão;
-  **Invocar** põe o boss no centro com entrada de clarão e tremor.
-- **Habilidades do boss:** os chips ligam/desligam o que aparece no telão. As notas secretas e a Defesa
-  nunca saem do servidor.
-- **Efeitos:** tremor, clarão, raio, chamas, gelo, sangue, escuridão, luz de cura.
-- **Turnos:** preencha a iniciativa (ou **Rolar iniciativa**, d20 + bônus), **Iniciar combate**, depois
-  **Próximo ▶** (tecla `N`). Clicar numa ficha da fila dá a vez a ela.
-- **↶ Desfazer** (`Ctrl+Z`). O menu **⋯** do topo tem copiar endereço do telão, Descanso e Reiniciar.
-- O estado fica em `data/estado.json`: ao reabrir, tudo volta como estava.
+- **Combate:** cada inimigo tem os ataques dele em botões — clique no ataque e depois no alvo e o
+  motor resolve. **Habilidade** serve para sopros, explosões e afins (dano, teste, CD, condição, vários alvos).
+  Heróis sem celular também podem agir pelo card. Dano/cura manual continua lá (`Enter` = dano,
+  `Shift+Enter` = cura; clique nas fotos para selecionar vários).
+- **Inimigos:** o PV fica **escondido por padrão** (menu de cada um: nada, estado, barra ou número).
+  O **olho** mostra/esconde no telão; **Invocar** põe o boss no centro com clarão e tremor.
+- **Turnos:** iniciativa (ou **Rolar iniciativa**, ou **Pedir teste → Iniciativa** para cada um rolar no
+  celular), **Iniciar combate**, **Próximo ▶** (tecla `N`).
+  Com *Em combate, cada um só age na sua vez* ligado (aba Jogadores), o celular espera a vez.
 
-## Galeria: mostrar imagens aos jogadores
+## Bestiário
 
-Na aba **Galeria** do painel (topo, ao lado de *Combate*):
+Aba **Bestiário**: suas fichas de inimigos guardadas, prontas para virar carta.
 
-- **Enviar:** clique em *Enviar imagens*, arraste arquivos para qualquer lugar do painel ou cole com `Ctrl+V`
-  (um print ou "copiar imagem" do navegador). PNG, JPG, WEBP, GIF ou SVG, até 25 MB.
-- **Mostrar aos jogadores:** passe o mouse na imagem e clique. Ela aparece em destaque no telão, com moldura
-  e o título que você escrever em *No telão agora*. **Esconder** (ou o **×** no topo do painel) tira do telão.
-- Os filtros **Heróis** e **Inimigos** mostram os tokens; enviar com um deles selecionado já coloca a imagem
-  em `personagens/` ou `bosses/`, pronta para escolher no **lápis** do cartão. O resto fica em `galeria/`.
-- A **lixeira** de cada imagem não apaga nada: o arquivo vai para a pasta `lixeira/`, de onde dá para recuperar.
+- **Importar do livro (PDF):** escolha o PDF do *Ameaças de Arton* (ou do livro básico) e os blocos de
+  estatísticas viram fichas (PV, Defesa, resistências, RD, imunidades e ataques). Fica tudo só neste
+  computador, em `data/bestiario/`. Confira as que vierem sem ND. Também dá pela linha de comando:
+  `npm run bestiario -- "caminho/Ameaças de Arton.pdf"`.
+- **Nova ameaça:** cole o bloco de estatísticas do livro e clique em *Preencher a ficha*.
+- **Guardar no bestiário:** no lápis de um inimigo da mesa.
+- **Pôr na mesa:** escolha a quantidade e clique; com mais de um, eles são numerados (*Orc 1, Orc 2…*).
+- **Chefe final** (Ameaças de Arton, p. 370): ligue a coroa antes de pôr na mesa, ou use *Tornar chefe final*
+  no lápis do inimigo. Dobra o PV, +2 PM por ND, ganha **Maior que a Morte** (com metade dos PV ou mais,
+  fica imune a morte instantânea — o motor já aplica), RD 5/10/20 a partir de veterano e ND +2.
+- **Encontros prontos:** monte o grupo na mesa e use *Salvar inimigos da mesa*. Na sessão, **Pôr na mesa**
+  acrescenta e **Trocar a mesa** substitui os inimigos atuais.
 
-## Suas fotos
+## Modo cena (roleplay)
 
-Coloque `.png .jpg .webp .gif .svg` em `personagens/` (heróis) e `bosses/` (inimigos). No cartão,
-clique no **lápis** e escolha a imagem (o editor mostra uma prévia). Use **Novo herói / Novo inimigo** para criar.
-As imagens atuais são brasões de exemplo (`node ferramentas/gerar-exemplos.js` recria).
+Aba **Cena**: o telão vira uma *visual novel*. A fala é na voz de vocês — o telão só mostra a cena.
+
+- Escolha o **cenário** (imagens da pasta `cenarios/` — envie pela Galeria) e ponha **heróis, inimigos ou
+  NPCs** no palco. **Arraste para qualquer lugar**: mais para cima fica mais ao fundo (e menor), dá para
+  montar uma roda na taverna. **Em fila** e **Em roda** organizam todo mundo de uma vez.
+- **Falando agora:** clique em quem está falando (ou dois cliques no personagem) e ele fica em destaque,
+  com a placa do nome; os outros escurecem.
+- **Expressão:** troque a imagem de um personagem só na cena (bravo, ferido, disfarçado…).
+- **Cenas prontas:** *Salvar este palco* guarda cenário e personagens nas posições; um clique traz de volta.
+- O botão **Combate / Cena** decide o que o telão mostra. PNG com fundo transparente aparece como
+  personagem de corpo inteiro; outras imagens aparecem como carta com moldura.
+
+## Mensagens secretas
+
+Botão do **envelope** no topo do painel: escreva algo só para um ou mais jogadores, com foto se quiser
+(anexar, colar com `Ctrl+V` ou escolher da galeria). No celular chega uma **carta lacrada** que só ele vê;
+ele pode responder em segredo. Você vê quem já leu e as respostas. **Revelar no telão** mostra a carta
+para todo mundo (e esconde de novo quando quiser). As fotos enviadas assim ficam em `data/segredos/`,
+fora das pastas públicas, até serem reveladas.
+
+## Editar fichas na mesa
+
+Na aba **Jogadores**, **Editar** abre a ficha completa: identidade, atributos, PV/PM/Defesa, RD, perícias,
+ataques (arma nova, item mágico), magias do livro, **magias próprias** (homebrew: dano, teste, condição,
+quanto tempo fica na mesa, aprimoramentos com +PM, efeito repetível enquanto ativa e a animação no telão —
+funcionam como as do livro), poderes, regras da casa, itens mágicos e notas. Poderes e itens com *Usar na
+mesa* ganham custo em PM, efeito e bônus enquanto ativos. **Ficha em branco** cria um personagem sem o Nimb
+(no celular também: *Criar personagem do zero*). Com *Jogadores editam a própria
+ficha* ligado, cada um também edita pelo celular (aba **Mais**); desligado, eles só mexem nas anotações.
+Reimportar o PDF do Nimb mantém as magias próprias e os itens criados aqui.
+
+## Backup
+
+No menu **⋯** do topo: **Baixar backup** gera um arquivo com fichas, bestiário, encontros, cenas e a mesa;
+**Restaurar backup** traz tudo de volta (a mesa só se você confirmar). Cada ficha também pode ser baixada em
+arquivo (aba Jogadores, ou *Baixar minha ficha* no celular) e importada em outra mesa pelo mesmo botão do
+PDF do Nimb.
+
+## Galeria
+
+Aba **Galeria**: envie imagens (botão, arrastar para o painel ou `Ctrl+V`). **Mostrar aos jogadores**
+põe a imagem em destaque no telão com título. Os filtros mandam os arquivos para `personagens/`,
+`bosses/`, `galeria/` ou `cenarios/`. A lixeira não apaga: o arquivo vai para `lixeira/`.
+
+## Para quem mexe no código
+
+- `npm run dev` — servidor com recarga automática (telas via Vite).
+- `npm run build` — monta as telas em `dist/` · `npm start` — roda sem o Vite.
+- `npm run tipos` — confere os tipos (TypeScript).
+- `node ferramentas/testar-regras.ts data/fichas/<id>.json` (ou um PDF de arcanista do Nimb) — roteiro do motor de regras.
+- Plano e decisões: `docs/PLANO.md`.
 
 ## Segurança e porta
 
 O painel do mestre só abre neste computador. Para controlar de outro aparelho, defina um `"pin"`
-em `config/mesa.json`. A porta também é configurada ali.
+em `config/mesa.json`. A porta também é configurada ali. Os celulares só veem a própria ficha e o que
+o telão mostra (Defesa, resistências e PV escondidos dos inimigos não saem do servidor).

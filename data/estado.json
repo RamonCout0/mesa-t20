@@ -1,23 +1,24 @@
 {
-  "versao": 2,
+  "versao": 3,
   "aliados": [
     {
       "id": "6b9d6da0",
       "nome": "Aldric",
       "imagem": "/personagens/aldric.svg",
-      "pv": 4,
+      "pv": 62,
       "pvMax": 62,
       "pvTemp": 0,
+      "pm": 15,
+      "pmMax": 15,
       "defesa": 24,
       "bonusIni": 2,
-      "iniciativa": null,
+      "iniciativa": 4,
       "condicoes": [],
       "jogador": "Jogador 1",
       "classe": "Guerreiro",
       "nivel": 5,
       "cor": "#d9534f",
-      "pm": 15,
-      "pmMax": 15
+      "fichaId": null
     },
     {
       "id": "52576ba9",
@@ -26,16 +27,17 @@
       "pv": 31,
       "pvMax": 31,
       "pvTemp": 0,
+      "pm": 34,
+      "pmMax": 34,
       "defesa": 17,
       "bonusIni": 3,
-      "iniciativa": null,
+      "iniciativa": 6,
       "condicoes": [],
       "jogador": "Jogador 2",
       "classe": "Arcanista",
       "nivel": 5,
       "cor": "#9b6bff",
-      "pm": 34,
-      "pmMax": 34
+      "fichaId": null
     },
     {
       "id": "19bd00b3",
@@ -44,16 +46,17 @@
       "pv": 48,
       "pvMax": 48,
       "pvTemp": 0,
+      "pm": 20,
+      "pmMax": 20,
       "defesa": 21,
       "bonusIni": 5,
-      "iniciativa": null,
+      "iniciativa": 23,
       "condicoes": [],
       "jogador": "Jogador 3",
       "classe": "Caçador",
       "nivel": 5,
       "cor": "#4caf6e",
-      "pm": 20,
-      "pmMax": 20
+      "fichaId": null
     },
     {
       "id": "bfb0818c",
@@ -62,16 +65,17 @@
       "pv": 44,
       "pvMax": 44,
       "pvTemp": 0,
+      "pm": 28,
+      "pmMax": 28,
       "defesa": 20,
       "bonusIni": 1,
-      "iniciativa": null,
+      "iniciativa": 14,
       "condicoes": [],
       "jogador": "Jogador 4",
       "classe": "Clériga",
       "nivel": 5,
       "cor": "#f2c94c",
-      "pm": 28,
-      "pmMax": 28
+      "fichaId": null
     },
     {
       "id": "befc244b",
@@ -80,16 +84,17 @@
       "pv": 70,
       "pvMax": 70,
       "pvTemp": 0,
+      "pm": 10,
+      "pmMax": 10,
       "defesa": 22,
       "bonusIni": 1,
-      "iniciativa": null,
+      "iniciativa": 8,
       "condicoes": [],
       "jogador": "Jogador 5",
       "classe": "Bárbaro",
       "nivel": 5,
       "cor": "#ff8c42",
-      "pm": 10,
-      "pmMax": 10
+      "fichaId": null
     },
     {
       "id": "3f0a7a09",
@@ -98,29 +103,51 @@
       "pv": 38,
       "pvMax": 38,
       "pvTemp": 0,
+      "pm": 26,
+      "pmMax": 26,
       "defesa": 19,
       "bonusIni": 4,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "jogador": "Jogador 6",
       "classe": "Bardo",
       "nivel": 5,
       "cor": "#3ec9c0",
-      "pm": 26,
-      "pmMax": 26
+      "fichaId": null
+    },
+    {
+      "id": "aef5bcc8",
+      "nome": "Farandhil",
+      "imagem": "",
+      "pv": 19,
+      "pvMax": 19,
+      "pvTemp": 0,
+      "pm": 42,
+      "pmMax": 42,
+      "defesa": 11,
+      "bonusIni": 3,
+      "iniciativa": 14,
+      "condicoes": [],
+      "jogador": "",
+      "classe": "Arcanista",
+      "nivel": 5,
+      "cor": "#e9c46a",
+      "fichaId": "5fbc5519"
     }
   ],
   "inimigos": [
     {
-      "id": "b3f18707",
+      "id": "1418b408",
       "nome": "Ignarax",
       "imagem": "/bosses/dragao.svg",
-      "pv": 0,
+      "pv": 320,
       "pvMax": 320,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 28,
       "bonusIni": 6,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "O Dragão das Cinzas",
       "nd": "ND 9",
@@ -146,18 +173,28 @@
           "nome": "Fúria da fênix",
           "ativa": false
         }
-      ]
+      ],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "4baebff1"
     },
     {
-      "id": "ea3060e4",
-      "nome": "Cultista das Cinzas",
+      "id": "a1437327",
+      "nome": "Cultista das Cinzas 1",
       "imagem": "/bosses/cultista.svg",
       "pv": 28,
       "pvMax": 28,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 14,
       "bonusIni": 1,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "Fanático",
       "nd": "ND 2",
@@ -166,18 +203,28 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "b346878b"
     },
     {
-      "id": "eb0c3644",
+      "id": "2e968f07",
       "nome": "Cultista das Cinzas 2",
       "imagem": "/bosses/cultista.svg",
       "pv": 28,
       "pvMax": 28,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 14,
       "bonusIni": 1,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "Fanático",
       "nd": "ND 2",
@@ -186,18 +233,28 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "c7a6a6ef"
     },
     {
-      "id": "dd8b76c5",
+      "id": "496a7f2d",
       "nome": "Sentinela Rúnico",
       "imagem": "/bosses/golem.svg",
-      "pv": 47,
+      "pv": 90,
       "pvMax": 90,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 22,
       "bonusIni": 0,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "Construto",
       "nd": "ND 5",
@@ -206,18 +263,28 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "Emboscada: só aparece quando o mestre revelar.",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "023c4ef3"
     },
     {
-      "id": "361a713e",
+      "id": "ddf1152f",
       "nome": "sasassas",
       "imagem": "",
       "pv": 30,
       "pvMax": 30,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 12,
       "bonusIni": 0,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "",
       "nd": "",
@@ -226,37 +293,289 @@
       "tema": "trevas",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "283e15ad"
     },
     {
-      "id": "b6aab35b",
+      "id": "ab0923f9",
       "nome": "czxcxzcx",
       "imagem": "",
       "pv": 30,
       "pvMax": 30,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 12,
       "bonusIni": 0,
-      "iniciativa": null,
+      "iniciativa": 15,
       "condicoes": [],
       "subtitulo": "",
       "nd": "",
-      "naTela": false,
+      "naTela": true,
       "revelar": "oculto",
       "tema": "trevas",
       "tier": "comum",
       "notas": "zxccxz",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "4b6959f1"
+    },
+    {
+      "id": "58bd625b",
+      "nome": "Orc Chefe 1",
+      "imagem": "",
+      "pv": 132,
+      "pvMax": 132,
+      "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
+      "defesa": 19,
+      "bonusIni": 5,
+      "iniciativa": 15,
+      "condicoes": [],
+      "subtitulo": "Humanoide (orc) Médio",
+      "nd": "ND 4",
+      "naTela": true,
+      "revelar": "oculto",
+      "tema": "trevas",
+      "tier": "epico",
+      "notas": "For 4, Des 1, Con 3, Int –1, Sab 0, Car 0\nPerícias: Intimidação +5\nEquipamento: Machado de batalha, cota de malha. Tesouro Padrão.",
+      "habilidades": [
+        {
+          "nome": "Sangue Quente",
+          "ativa": false
+        },
+        {
+          "nome": "Maior que a Morte",
+          "ativa": true
+        }
+      ],
+      "fort": 13,
+      "ref": 7,
+      "von": 2,
+      "rd": {
+        "fogo": 5
+      },
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [
+        {
+          "id": "at1",
+          "nome": "Machado de batalha",
+          "bonus": 11,
+          "dano": "1d8+12",
+          "tipoDano": "corte",
+          "margem": 20,
+          "mult": 3,
+          "alcance": "Corpo a corpo",
+          "distancia": false,
+          "arquetipo": "corte"
+        }
+      ],
+      "ameacaId": "66faac05",
+      "chefeFinal": true
+    },
+    {
+      "id": "228c6224",
+      "nome": "Orc Chefe 2",
+      "imagem": "",
+      "pv": 66,
+      "pvMax": 66,
+      "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
+      "defesa": 19,
+      "bonusIni": 5,
+      "iniciativa": 15,
+      "condicoes": [],
+      "subtitulo": "Humanoide (orc) Médio",
+      "nd": "ND 2",
+      "naTela": true,
+      "revelar": "oculto",
+      "tema": "trevas",
+      "tier": "comum",
+      "notas": "For 4, Des 1, Con 3, Int –1, Sab 0, Car 0\nPerícias: Intimidação +5\nEquipamento: Machado de batalha, cota de malha. Tesouro Padrão.",
+      "habilidades": [
+        {
+          "nome": "Sangue Quente",
+          "ativa": false
+        }
+      ],
+      "fort": 13,
+      "ref": 7,
+      "von": 2,
+      "rd": {
+        "fogo": 5
+      },
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [
+        {
+          "id": "at1",
+          "nome": "Machado de batalha",
+          "bonus": 11,
+          "dano": "1d8+12",
+          "tipoDano": "corte",
+          "margem": 20,
+          "mult": 3,
+          "alcance": "Corpo a corpo",
+          "distancia": false,
+          "arquetipo": "corte"
+        }
+      ],
+      "ameacaId": "66faac05"
     }
   ],
   "cena": {
-    "bossId": "b3f18707",
+    "modo": "combate",
+    "bossId": null,
     "idInvocacao": "45269121",
-    "mostrar": null
+    "mostrar": null,
+    "palco": {
+      "fundo": "/cenarios/taverna.svg",
+      "atores": [
+        {
+          "id": "08c8b18a",
+          "refId": "52576ba9",
+          "nome": "Lyra",
+          "imagem": "/personagens/lyra.svg",
+          "cor": "#9b6bff",
+          "x": 26,
+          "espelhar": false,
+          "y": 59,
+          "expressao": ""
+        },
+        {
+          "id": "473d9619",
+          "refId": "befc244b",
+          "nome": "Brom",
+          "imagem": "/personagens/brom.svg",
+          "cor": "#ff8c42",
+          "x": 16,
+          "espelhar": false,
+          "y": 72,
+          "expressao": ""
+        },
+        {
+          "id": "e0025363",
+          "refId": null,
+          "nome": "Taverneiro Gruff",
+          "imagem": "/bosses/golem.svg",
+          "cor": "#e0a85a",
+          "x": 74,
+          "espelhar": true,
+          "y": 85,
+          "expressao": ""
+        },
+        {
+          "id": "0d646991",
+          "refId": "aef5bcc8",
+          "nome": "Farandhil",
+          "imagem": "",
+          "cor": "#e9c46a",
+          "x": 90,
+          "espelhar": false,
+          "y": 59,
+          "expressao": ""
+        },
+        {
+          "id": "eb25a030",
+          "refId": "6b9d6da0",
+          "nome": "Aldric",
+          "imagem": "/personagens/aldric.svg",
+          "cor": "#d9534f",
+          "x": 74,
+          "y": 59,
+          "espelhar": true,
+          "expressao": ""
+        },
+        {
+          "id": "521045c0",
+          "refId": "19bd00b3",
+          "nome": "Thorn",
+          "imagem": "/personagens/thorn.svg",
+          "cor": "#4caf6e",
+          "x": 26,
+          "y": 85,
+          "espelhar": false,
+          "expressao": ""
+        },
+        {
+          "id": "d14356e3",
+          "refId": "bfb0818c",
+          "nome": "Mirela",
+          "imagem": "/personagens/mirela.svg",
+          "cor": "#f2c94c",
+          "x": 50,
+          "y": 54,
+          "espelhar": true,
+          "expressao": ""
+        },
+        {
+          "id": "2a2a76f3",
+          "refId": "3f0a7a09",
+          "nome": "Seren",
+          "imagem": "/personagens/seren.svg",
+          "cor": "#3ec9c0",
+          "x": 84,
+          "y": 72,
+          "espelhar": true,
+          "expressao": ""
+        }
+      ],
+      "destaque": "d14356e3"
+    },
+    "revelacao": null
   },
   "turnos": {
     "ativo": false,
     "rodada": 1,
     "atual": null
-  }
+  },
+  "opcoes": {
+    "importarPeloCelular": true,
+    "acaoSoNaVez": false,
+    "fichaLivre": true,
+    "zerarAntes": true,
+    "iniciativaUnica": true,
+    "falasPeloCelular": true
+  },
+  "efeitos": [],
+  "temporizadores": [],
+  "pedidos": [
+    {
+      "id": "0aec270a",
+      "pericia": "Percepção",
+      "cd": 15,
+      "secreto": false,
+      "alvos": [
+        "aef5bcc8",
+        "52576ba9"
+      ],
+      "respostas": {
+        "aef5bcc8": {
+          "total": 13,
+          "passou": false
+        },
+        "52576ba9": {
+          "total": 15,
+          "passou": true
+        }
+      },
+      "criadoEm": 1791425552273
+    }
+  ]
 }
