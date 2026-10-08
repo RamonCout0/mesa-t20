@@ -31,3 +31,18 @@ export function criarEnviar(avisar: Avisar) {
     return r.ok;
   };
 }
+
+/** Encontros e cenas salvos (preparo do mestre). */
+export async function pedirSalvos(avisar: Avisar, corpo: Record<string, unknown>) {
+  const r = await postar('/api/mestre/salvos', corpo, { 'x-pin': pin });
+  if (!r.ok) {
+    avisar(r.erro ?? 'Algo deu errado.');
+    return null;
+  }
+  return r;
+}
+
+export interface ItemEncontro { ameacaId: string; quantidade: number; chefeFinal?: boolean }
+export interface Encontro { id: string; nome: string; itens: ItemEncontro[]; criadoEm: number }
+export interface CenaSalva { id: string; nome: string; palco: import('../comum/tipos-cliente.ts').Palco; criadoEm: number }
+export interface SalvosMestre { encontros: Encontro[]; cenas: CenaSalva[] }

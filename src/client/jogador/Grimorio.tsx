@@ -1,8 +1,9 @@
 // Aba "Magias": grimorio da ficha, lancamento com aprimoramentos e as magias ativas do jogador.
 import { useMemo, useState } from 'react';
 import { CUSTO_CIRCULO, cdMagia, limitePm } from '../../shared/ficha.ts';
-import { NOME_ESCOLA, buscarMagia, type Magia } from '../../shared/magias.ts';
-import { efeitoDaMagia, type AlvoMagia, type Uso } from '../../shared/magias-efeitos.ts';
+import { NOME_ESCOLA, type Magia } from '../../shared/magias.ts';
+import { FONTE_PROPRIA, acharMagia, efeitoNaFicha, magiasDaFicha } from '../../shared/magias-proprias.ts';
+import type { AlvoMagia, Uso } from '../../shared/magias-efeitos.ts';
 import type { EfeitoAtivo } from '../../shared/acoes.ts';
 import { NOME_DANO } from '../../shared/tipos.ts';
 import { Icone } from '../comum/Icone.tsx';
@@ -11,7 +12,7 @@ import { Folha } from './Folha.tsx';
 import { lerExpressao } from '../../shared/rolagem.ts';
 
 /** Faces dos dados que o jogador segura (os do dano/cura da magia). */
-function dadosDaExpressao(...exprs: (string | undefined)[]) {
+export function dadosDaExpressao(...exprs: (string | undefined)[]) {
   const faces: number[] = [];
   for (const e of exprs) {
     if (!e) continue;
@@ -36,7 +37,7 @@ export function Grimorio(props: PropsAba) {
   const [circulo, setCirculo] = useState(0);
   const [aberta, setAberta] = useState<Magia | null>(null);
   const [usando, setUsando] = useState<{ efeito: EfeitoAtivo; indice: number; uso: Uso } | null>(null);
-  const magias = useMemo(() => ficha.magias.map((id) => buscarMagia(id)).filter((m): m is Magia => Boolean(m)), [ficha.magias]);
+  const magias = useMemo(() => magiasDaFicha(ficha), [ficha]);
   const circulos = [...new Set(magias.map((m) => m.circulo))].sort();
   const lista = magias.filter((m) => !circulo || m.circulo === circulo);
   const pm = heroi?.pm ?? ficha.pmMax;
@@ -47,7 +48,7 @@ export function Grimorio(props: PropsAba) {
     return (
       <main>
         <div className="j-secao"><h3>Magias</h3><span className="deco" /></div>
-        <div className="j-vazio"><b>Nenhuma magia na ficha</b>Se o seu personagem aprendeu magias depois, exporte o PDF de novo no Nimb e use “Atualizar ficha” na aba Mais.</div>
+        <div className="j-vazio"><b>Nenhuma magia na ficha</b>Aprendeu magias? Use “Editar ficha” na aba Mais (do livro ou criadas pelo grupo), ou atualize o PDF do Nimb.</div>
       </main>
     );
   }
@@ -59,8 +60,8 @@ export function Grimorio(props: PropsAba) {
           <div className="j-secao"><h3>Ativas</h3><span className="conta">{ativas.length}</span><span className="deco" /></div>
           <div className="j-lista">
             {ativas.map((e) => {
-              const m = buscarMagia(e.magiaId);
-              const usos = m ? efeitoDaMagia(m).usos ?? [] : [];
+              const m = acharMagia(ficha, e.magiaId);
+              const usos = m ? efeitoNaFicha(ficha, m).usos ?? [] : [];
               return (
                 <div key={e.id} className="ativa">
                   <div className="ativa-topo">
@@ -96,10 +97,10 @@ export function Grimorio(props: PropsAba) {
       <div className="j-lista">
         {lista.map((m) => {
           const custo = CUSTO_CIRCULO[m.circulo];
-          const e = efeitoDaMagia(m);
+          const e = efeitoNaFicha(ficha, m);
           return (
             <button key={m.id} type="button" className={`j-item ${custo > pm ? 'sem-pm' : ''}`} onClick={() => setAberta(m)}>
-              <span className="icone-item">{ICONE_ESCOLA[m.escola] ?? '✨'}</span>
+              <span className="icone-item">{m.fonte === FONTE_PROPRIA ? '🌟' : ICONE_ESCOLA[m.escola] ?? '✨'}</span>
               <span style={{ minWidth: 0 }}>
                 <b>{m.nome}</b>
                 <small>{[`${m.circulo}º`, e.dano ? `${e.dano}${e.tipoDano ? ` ${NOME_DANO[e.tipoDano]}` : ''}` : e.cura ? `cura ${e.cura}` : NOME_ESCOLA[m.escola], e.res ? TESTE[e.res] : m.alcance].filter(Boolean).join(' · ')}</small>
@@ -123,7 +124,7 @@ export function Grimorio(props: PropsAba) {
 }
 
 function LancarMagia({ magia, fechar, ficha, heroi, estado, agir, bloqueio }: PropsAba & { magia: Magia; fechar: () => void }) {
-  const efeito = efeitoDaMagia(magia);
+  const efeito = efeitoNaFicha(ficha, magia);
   const [vezes, setVezes] = useState<Record<number, number>>({});
   const [alvos, setAlvos] = useState<string[]>([]);
   const [mostrarTodos, setMostrarTodos] = useState(false);

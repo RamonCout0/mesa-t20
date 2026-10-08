@@ -6,3 +6,6 @@ data/bestiario/
 lixeira/
 *.log
 data/registro.json
+data/segredos/
+data/encontros.json
+data/cenas.json

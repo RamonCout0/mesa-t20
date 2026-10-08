@@ -1,11 +1,11 @@
 // Painel do mestre: combate, galeria e os controles do telao.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { EFEITOS } from '../../shared/condicoes.ts';
-import type { Ameaca, Entidade, Estado, ImagemGaleria, InfoServidor, Lado } from '../comum/tipos-cliente.ts';
+import type { Ameaca, Entidade, Estado, ImagemGaleria, InfoServidor, Lado, Segredo } from '../comum/tipos-cliente.ts';
 import { useMesa } from '../comum/conexao.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { Icone } from '../comum/Icone.tsx';
-import { Painel, criarEnviar, pin, type Avisar } from './contexto.ts';
+import { Painel, criarEnviar, pin, type Avisar, type SalvosMestre } from './contexto.ts';
 import { Botao } from './Botao.tsx';
 import { Card } from './Card.tsx';
 import { Editor, type AlvoEditor } from './Editor.tsx';
@@ -15,6 +15,7 @@ import { Registro } from './Registro.tsx';
 import { Bestiario } from './Bestiario.tsx';
 import { CenaPainel } from './CenaPainel.tsx';
 import { FaixaTestes, PedirTeste } from './Testes.tsx';
+import { SegredosPainel } from './SegredosPainel.tsx';
 import type { ResultadoAcao } from '../../shared/acoes.ts';
 import type { Ficha } from '../../shared/ficha.ts';
 
@@ -69,6 +70,10 @@ function PainelMestre({ info }: { info: InfoServidor }) {
   const [bestiario, setBestiario] = useState<Ameaca[]>([]);
   const [registroAberto, setRegistroAberto] = useState(false);
   const [pedindoTeste, setPedindoTeste] = useState(false);
+  const [segredos, setSegredos] = useState<Segredo[]>([]);
+  const [salvos, setSalvos] = useState<SalvosMestre>({ encontros: [], cenas: [] });
+  const [segredosAberto, setSegredosAberto] = useState(false);
+  const [respostasVistas, setRespostasVistas] = useState(0);
   const [novidades, setNovidades] = useState(0);
   const { estado, online } = useMesa<Estado>('mestre', {
     pin,
@@ -76,6 +81,8 @@ function PainelMestre({ info }: { info: InfoServidor }) {
       fichas: (d) => setFichas(d as Ficha[]),
       registro: (d) => setRegistro(d as ResultadoAcao[]),
       bestiario: (d) => setBestiario(d as Ameaca[]),
+      segredos: (d) => setSegredos(d as Segredo[]),
+      salvos: (d) => setSalvos(d as SalvosMestre),
       acao: (d) => {
         const r = d as ResultadoAcao;
         setRegistro((lista) => [r, ...lista.filter((x) => x.id !== r.id)].slice(0, 80));
@@ -96,6 +103,14 @@ function PainelMestre({ info }: { info: InfoServidor }) {
   const timerToast = useRef<number>(undefined);
   const receberArquivos = useRef<(a: FileList | File[]) => void>(() => {});
   const menu = useRef<HTMLDetailsElement>(null);
+  const backup = useRef<HTMLInputElement>(null);
+  const restaurar = async (arquivo: File) => {
+    const mesa = confirm('Restaurar também a mesa (heróis, inimigos, turnos e palco)?\n\nOK = sim, substitui a mesa atual (dá para desfazer)\nCancelar = só fichas, bestiário, encontros e cenas');
+    const r = await fetch(`/api/mestre/backup?mesa=${mesa ? 1 : 0}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-pin': pin }, body: await arquivo.text() })
+      .then((x) => x.json()).catch(() => ({ ok: false, erro: 'Sem conexão com o servidor.' }));
+    if (!r.ok) return avisar(r.erro ?? 'Não consegui restaurar.');
+    avisar(`Backup restaurado: ${r.fichas} fichas, ${r.ameacas} ameaças, ${r.salvos} encontros/cenas${r.mesa ? ' e a mesa' : ''}.`, 'info');
+  };
 
   const avisar: Avisar = useCallback((texto, tipo = 'erro') => {
     setToast({ texto, tipo, visivel: true });
@@ -131,8 +146,11 @@ function PainelMestre({ info }: { info: InfoServidor }) {
   // Atalhos: N / seta = proximo turno, Ctrl+Z = desfazer.
   useEffect(() => {
     const tecla = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).matches('input, textarea, select')) return;
-      if (e.key === 'n' || e.key === 'ArrowRight') enviar({ tipo: 'turno', acao: 'proximo' });
+      if ((e.target as HTMLElement).matches('input, textarea, select, [contenteditable]')) return;
+      // So a tecla N (sem Ctrl/Alt) e sem janela aberta: setas do teclado nao passam a vez sem querer.
+      if (e.key.toLowerCase() === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey && !document.querySelector('dialog[open]')) {
+        enviar({ tipo: 'turno', acao: 'proximo' });
+      }
       if (e.key === 'z' && (e.ctrlKey || e.metaKey)) enviar({ tipo: 'desfazer' });
     };
     addEventListener('keydown', tecla);
@@ -184,6 +202,7 @@ function PainelMestre({ info }: { info: InfoServidor }) {
 
   const registrarEnvio = useCallback((f: (a: FileList | File[]) => void) => { receberArquivos.current = f; }, []);
   const enderecoTelao = `${info.enderecos[0] ?? location.origin}/telao?fundo=1`;
+  const totalRespostas = segredos.reduce((n, s) => n + s.respostas.length, 0);
 
   if (!estado) return <Topo online={false} />;
 
@@ -260,7 +279,7 @@ function PainelMestre({ info }: { info: InfoServidor }) {
             </>
           ) : (
             <>
-              <Botao icone="d20" texto="Rolar iniciativa" title="d20 + bônus de cada um" onClick={() => enviar({ tipo: 'rolarIniciativa' })} />
+              <Botao icone="d20" texto="Rolar iniciativa" title={estado.opcoes.iniciativaUnica ? 'Heróis: d20 + bônus de cada um. Inimigos: um teste só, com o menor bônus (regra do livro)' : 'd20 + bônus de cada um'} onClick={() => enviar({ tipo: 'rolarIniciativa' })} />
               <Botao icone="celular" texto="Pedir teste" title="Cada jogador rola no celular (perícia, resistência ou iniciativa)" onClick={() => setPedindoTeste(true)} />
               <Botao classe="ouro" icone="play" texto="Iniciar combate" onClick={() => enviar({ tipo: 'turno', acao: 'iniciar' })} />
             </>
@@ -281,7 +300,11 @@ function PainelMestre({ info }: { info: InfoServidor }) {
           <button className={`btn ${fxAberto ? 'ativo' : ''}`} title="Efeitos de tela" onClick={() => setFxAberto((v) => !v)}>
             <Icone nome="faisca" /><span className="rotulo-btn">Efeitos</span>
           </button>
-          <button className={`btn icone ${registroAberto ? 'ativo' : ''}`} title="Registro das ações" onClick={() => { setRegistroAberto((v) => !v); setNovidades(0); }}>
+          <button className={`btn icone ${segredosAberto ? 'ativo' : ''}`} title="Mensagens secretas para os jogadores" onClick={() => { setSegredosAberto((v) => !v); setRegistroAberto(false); setRespostasVistas(totalRespostas); }}>
+            <Icone nome="carta" />
+            {totalRespostas > respostasVistas && !segredosAberto ? <i className="contador">{totalRespostas - respostasVistas}</i> : null}
+          </button>
+          <button className={`btn icone ${registroAberto ? 'ativo' : ''}`} title="Registro das ações" onClick={() => { setRegistroAberto((v) => !v); setSegredosAberto(false); setNovidades(0); }}>
             <Icone nome="log" />
             {novidades && !registroAberto ? <i className="contador">{novidades > 9 ? '9+' : novidades}</i> : null}
           </button>
@@ -294,6 +317,21 @@ function PainelMestre({ info }: { info: InfoServidor }) {
               </button>
               <button onClick={() => { setMenuAberto(false); if (confirm('Curar todos os heróis, restaurar PM e remover condições?')) enviar({ tipo: 'descanso' }); }}>
                 <Icone nome="lua" />Descanso (cura todos os heróis)
+              </button>
+              <hr />
+              <button onClick={async () => {
+                setMenuAberto(false);
+                const r = await fetch('/api/mestre/backup', { headers: { 'x-pin': pin } });
+                if (!r.ok) return avisar('Não consegui gerar o backup.');
+                const url = URL.createObjectURL(await r.blob());
+                const link = Object.assign(document.createElement('a'), { href: url, download: `mesa-t20-backup-${new Date().toISOString().slice(0, 10)}.json` });
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 2000);
+              }}>
+                <Icone nome="enviar" />Baixar backup (fichas, bestiário, encontros, cenas, mesa)
+              </button>
+              <button onClick={() => { setMenuAberto(false); backup.current?.click(); }}>
+                <Icone nome="arquivo" />Restaurar backup…
               </button>
               <hr />
               <button onClick={() => { setMenuAberto(false); if (confirm('Voltar ao grupo de exemplo? (dá para desfazer)')) enviar({ tipo: 'reiniciar' }); }}>
@@ -363,11 +401,12 @@ function PainelMestre({ info }: { info: InfoServidor }) {
       </div>
 
       <Jogadores estado={estado} fichas={fichas} info={info} visivel={aba === 'jogadores'} />
-      <CenaPainel visivel={aba === 'cena'} estado={estado} imagens={imagens} abrirGaleria={() => abrirAba('galeria')} />
+      <CenaPainel visivel={aba === 'cena'} estado={estado} imagens={imagens} abrirGaleria={() => abrirAba('galeria')} cenas={salvos.cenas} />
       <Bestiario
         visivel={aba === 'bestiario'}
         estado={estado}
         bestiario={bestiario}
+        encontros={salvos.encontros}
         editar={(a) => setEditor({ lado: 'inimigos', ent: null, ameaca: a })}
         irParaCombate={() => abrirAba('combate')}
       />
@@ -415,7 +454,9 @@ function PainelMestre({ info }: { info: InfoServidor }) {
         </div>
       ) : null}
 
+      <input ref={backup} type="file" accept="application/json,.json" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) restaurar(f); e.target.value = ''; }} />
       <PedirTeste estado={estado} aberto={pedindoTeste} fechar={() => setPedindoTeste(false)} />
+      <SegredosPainel aberto={segredosAberto} fechar={() => setSegredosAberto(false)} estado={estado} fichas={fichas} segredos={segredos} imagens={imagens} />
       <Registro aberto={registroAberto} fechar={() => setRegistroAberto(false)} registro={registro} />
       <Editor alvo={editor} imagens={imagens} fechar={() => setEditor(null)} aoRemover={(id) => setSelecionados((s) => { const n = new Set(s); n.delete(id); return n; })} />
       <div className={`toast ${toast.tipo} ${toast.visivel ? 'visivel' : ''}`}>{toast.texto}</div>

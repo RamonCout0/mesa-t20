@@ -1,6 +1,6 @@
 // Primeira tela do celular: importar a ficha do Nimb ou entrar com o codigo do mestre.
 import { useRef, useState } from 'react';
-import { enviarArquivo } from '../comum/conexao.ts';
+import { enviarArquivo, postar } from '../comum/conexao.ts';
 import { Icone } from '../comum/Icone.tsx';
 import type { Avisar } from './Aviso.tsx';
 
@@ -8,6 +8,17 @@ export function Entrada({ entrar, avisar }: { entrar: (codigo: string) => void; 
   const [codigo, setCodigo] = useState('');
   const [enviando, setEnviando] = useState(false);
   const arquivo = useRef<HTMLInputElement>(null);
+
+  const criarDoZero = async () => {
+    const nome = prompt('Nome do personagem:');
+    if (!nome?.trim()) return;
+    setEnviando(true);
+    const r = await postar('/api/jogador/nova', { nome });
+    setEnviando(false);
+    if (!r.ok) return avisar(r.erro ?? 'Não consegui criar.');
+    avisar('Personagem criado! Preencha a ficha em “Mais” → “Editar ficha”.', 'info');
+    entrar(String(r.codigo));
+  };
 
   const importar = async (f: File) => {
     setEnviando(true);
@@ -44,6 +55,14 @@ export function Entrada({ entrar, avisar }: { entrar: (codigo: string) => void; 
           hidden
           onChange={(e) => { const f = e.target.files?.[0]; if (f) importar(f); e.target.value = ''; }}
         />
+      </section>
+
+      <section className="j-cartao">
+        <h2>Não tenho ficha no Nimb</h2>
+        <p>Crie o personagem aqui e preencha a ficha no próprio celular.</p>
+        <button type="button" className="j-btn largo" disabled={enviando} onClick={criarDoZero}>
+          <Icone nome="mais" />Criar personagem do zero
+        </button>
       </section>
 
       <section className="j-cartao">

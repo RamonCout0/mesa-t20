@@ -12,14 +12,14 @@ import { Acoes } from './Acoes.tsx';
 import { Grimorio } from './Grimorio.tsx';
 import { Mais } from './Mais.tsx';
 import { Dados } from './Dados.tsx';
-import { Cena } from './Cena.tsx';
+import { Segredos } from './Segredos.tsx';
+import type { Segredo } from '../comum/tipos-cliente.ts';
 import { Lancamento, type PedidoLancamento } from './Resultado.tsx';
 import { postar } from '../comum/conexao.ts';
 
-export type Aba = 'cena' | 'carta' | 'acoes' | 'magias' | 'dados' | 'mais';
+export type Aba = 'carta' | 'acoes' | 'magias' | 'dados' | 'mais';
 
 const ABAS: [Aba, string, string][] = [
-  ['cena', 'balao', 'Cena'],
   ['carta', 'cartas', 'Carta'],
   ['acoes', 'espada', 'Ações'],
   ['magias', 'varinha', 'Magias'],
@@ -55,10 +55,14 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
   const [ficha, setFicha] = useState(inicial);
   const [aba, setAba] = useState<Aba>(abaGuardada);
   const meuId = useRef<string | null>(null);
+  const [segredos, setSegredos] = useState<Segredo[]>([]);
   const { estado, online } = useMesa<EstadoPublico>('jogador', {
     codigo,
     ouvintes: {
       ficha: (d) => { const r = d as { ficha: Ficha } | null; if (r?.ficha) setFicha(r.ficha); },
+      segredos: (d) => setSegredos(d as Segredo[]),
+      // O telao mostrou a acao: o lancamento aberto mostra o resumo.
+      apresentado: (d) => dispatchEvent(new CustomEvent('mesa-apresentado', { detail: (d as { id: string }).id })),
       // Levou um golpe: o celular treme (mais forte no critico).
       acao: (d) => {
         const meu = (d as ResultadoAcao).alvos.find((a) => a.id === meuId.current);
@@ -76,20 +80,12 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
   const heroi = estado?.aliados.find((h) => h.fichaId === ficha.id) ?? null;
   meuId.current = heroi?.id ?? null;
   const naVez = Boolean(estado?.turnos.ativo && heroi && estado.turnos.atual === heroi.id);
-  const roleplay = estado?.cena.modo === 'roleplay';
-  const abas = ABAS.filter(([id]) => id !== 'cena' || roleplay);
 
   // Chegou a vez: o celular vibra.
   useEffect(() => {
     if (naVez) navigator.vibrate?.([140, 80, 140]);
   }, [naVez]);
 
-  // O mestre abriu a cena: vai para a aba Cena; fechou: volta para a carta.
-  useEffect(() => {
-    if (!estado) return;
-    if (roleplay) setAba('cena');
-    else setAba((a) => (a === 'cena' ? 'carta' : a));
-  }, [roleplay, Boolean(estado)]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const enviar = (acao: Record<string, unknown>) => postar('/api/jogador/acao', acao, { 'x-codigo': codigo });
   const agir: PropsAba['agir'] = async (acao, opcoes = {}) => {
@@ -129,7 +125,10 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
           <div className="nome">{ficha.nome}</div>
           <div className="sub">{[ficha.classe, `Nível ${ficha.nivel}`, ficha.raca].filter(Boolean).join(' · ')}</div>
         </div>
-        <span className={`j-status ${online ? 'on' : ''}`}><i />{online ? 'Ao vivo' : 'Sem sinal'}</span>
+        <div className="j-topo-dir">
+          <span className={`j-status ${online ? 'on' : ''}`}><i />{online ? 'Ao vivo' : 'Sem sinal'}</span>
+          <Segredos codigo={codigo} fichaId={ficha.id} lista={segredos} avisar={avisar} />
+        </div>
         <div className="barras">
           <Barra tipo="pv" atual={heroi?.pv ?? ficha.pvMax} max={heroi?.pvMax ?? ficha.pvMax} temp={heroi?.pvTemp ?? 0} />
           {ficha.pmMax ? <Barra tipo="pm" atual={heroi?.pm ?? ficha.pmMax} max={heroi?.pmMax ?? ficha.pmMax} /> : null}
@@ -158,7 +157,6 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
           </div>
         );
       })}
-      {aba === 'cena' && roleplay ? <Cena {...props} /> : null}
       {aba === 'carta' ? <Carta {...props} /> : null}
       {aba === 'acoes' ? <Acoes {...props} /> : null}
       {aba === 'magias' ? <Grimorio {...props} /> : null}
@@ -167,8 +165,8 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
 
       {lancamento ? <Lancamento pedido={lancamento} modelo={ficha.dado} enviar={enviar} avisar={avisar} /> : null}
 
-      <nav className="j-nav" style={{ gridTemplateColumns: `repeat(${abas.length}, 1fr)` }}>
-        {abas.map(([id, icone, nome]) => (
+      <nav className="j-nav">
+        {ABAS.map(([id, icone, nome]) => (
           <button key={id} type="button" className={aba === id ? 'ativo' : ''} onClick={() => setAba(id)}>
             <Icone nome={icone} />{nome}
           </button>

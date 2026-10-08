@@ -1,7 +1,8 @@
-// Modo cena (roleplay) no telao, com cara de visual novel: cenario de fundo, personagens em pe
-// no palco, quem fala fica em destaque e o texto corre na caixa de dialogo.
+// Modo cena (roleplay) no telao, com cara de visual novel: cenario de fundo e personagens em pe
+// no palco, cada um onde o mestre colocou (os do fundo menores). Quem fala fica em destaque com a
+// placa do nome; a fala mesmo e na voz dos jogadores.
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import type { Ator, EstadoPublico, Fala, Palco } from '../comum/tipos-cliente.ts';
+import type { Ator, EstadoPublico, Palco } from '../comum/tipos-cliente.ts';
 import { iniciais } from '../comum/pecas.tsx';
 
 // ---------------- imagem recortada (PNG com fundo transparente) ou retrato com moldura ----------------
@@ -83,62 +84,38 @@ function Fundo({ url }: { url: string }) {
 
 // ---------------- personagem ----------------
 
-function Personagem({ ator, estado, falando, calado, saindo, falaId }: {
-  ator: Ator; estado: EstadoPublico; falando: boolean; calado: boolean; saindo?: boolean; falaId?: string;
-}) {
-  // Heroi/inimigo da mesa: nome e imagem atualizados ao vivo.
+/** Perspectiva: quem esta no fundo do palco (y pequeno) fica menor. */
+export const escalaDoPalco = (y: number) => 0.42 + 0.6 * (y / 100);
+
+function dadosVivos(ator: Ator, estado: EstadoPublico) {
+  // Heroi/inimigo da mesa: nome e imagem atualizados ao vivo; a expressao da cena tem prioridade.
   const vivo = ator.refId ? [...estado.aliados, ...estado.inimigos].find((x) => x.id === ator.refId) : undefined;
-  const imagem = vivo?.imagem || ator.imagem;
-  const nome = vivo?.nome ?? ator.nome;
+  return { imagem: ator.expressao || vivo?.imagem || ator.imagem, nome: vivo?.nome ?? ator.nome };
+}
+
+function Personagem({ ator, estado, falando, calado, saindo }: {
+  ator: Ator; estado: EstadoPublico; falando: boolean; calado: boolean; saindo?: boolean;
+}) {
+  const { imagem, nome } = dadosVivos(ator, estado);
   const recortada = useRecortada(imagem);
   const classes = [
     'vn-ator', recortada ? 'recortado' : 'moldurado', falando ? 'falando' : '', calado ? 'calado' : '', saindo ? 'saindo' : '',
     ator.espelhar ? 'espelhado' : '',
   ].filter(Boolean).join(' ');
+  const estilo = {
+    left: `${ator.x}%`, top: `${ator.y}%`, zIndex: falando ? 200 : Math.round(ator.y), '--cor': ator.cor, '--escala': escalaDoPalco(ator.y),
+  } as CSSProperties;
   return (
-    <div className={classes} data-ref={ator.refId ?? undefined} style={{ left: `${ator.x}%`, '--cor': ator.cor } as CSSProperties}>
+    <div className={classes} data-ref={ator.refId ?? undefined} style={estilo}>
+      <div className="vn-sombra" />
       <div className="vn-corpo">
-        <div className="vn-pulo" key={falando ? falaId : 'parado'}>
-          <div className="vn-sprite" style={imagem ? { backgroundImage: `url("${imagem}")` } : undefined}>
+        <div className="vn-pulo" key={falando ? 'falando' : 'parado'}>
+          <div className="vn-sprite" key={imagem} style={imagem ? { backgroundImage: `url("${imagem}")` } : undefined}>
             {imagem ? null : <span className="vn-iniciais">{iniciais(nome)}</span>}
           </div>
           {recortada ? null : <div className="vn-plaquinha">{nome}</div>}
         </div>
       </div>
-      <div className="vn-sombra" />
-    </div>
-  );
-}
-
-// ---------------- caixa de dialogo ----------------
-
-function CaixaFala({ fala }: { fala: Fala }) {
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    setN(0);
-    const passo = Math.max(1, Math.round(fala.texto.length / 260)); // falas longas correm mais rapido
-    const id = setInterval(() => {
-      setN((v) => {
-        if (v >= fala.texto.length) {
-          clearInterval(id);
-          return v;
-        }
-        return v + passo;
-      });
-    }, 24);
-    return () => clearInterval(id);
-  }, [fala.id, fala.texto]);
-  const narrador = !fala.atorId;
-  const pronta = n >= fala.texto.length;
-  return (
-    <div className={`vn-caixa ${narrador ? 'narrador' : ''}`} key={fala.id} style={{ '--cor': fala.cor } as CSSProperties}>
-      {!narrador || fala.nome ? <div className="vn-nome">{fala.nome || 'Narrador'}</div> : null}
-      <p className="vn-texto">
-        <span>{fala.texto.slice(0, n)}</span>
-        <span className="vn-resto">{fala.texto.slice(n)}</span>
-      </p>
-      <i className={`vn-seta ${pronta ? 'visivel' : ''}`} aria-hidden="true">▼</i>
-      <i className="vn-canto c1" /><i className="vn-canto c2" /><i className="vn-canto c3" /><i className="vn-canto c4" />
     </div>
   );
 }
@@ -147,24 +124,22 @@ function CaixaFala({ fala }: { fala: Fala }) {
 
 export function PalcoCena({ palco, estado, ativo }: { palco: Palco; estado: EstadoPublico; ativo: boolean }) {
   const saindo = useComSaida(palco.atores);
-  const falandoId = palco.fala?.atorId ?? null;
+  const destaque = palco.atores.find((a) => a.id === palco.destaque) ?? null;
   return (
     <div className={`vn-palco ${ativo ? 'ativo' : ''}`} aria-hidden={!ativo}>
       <Fundo url={palco.fundo} />
-      <div className="vn-atores" style={{ '--n': Math.max(3, palco.atores.length) } as CSSProperties}>
+      <div className="vn-atores" style={{ '--n': Math.max(3, palco.atores.filter((a) => a.y >= 70).length) } as CSSProperties}>
         {palco.atores.map((a) => (
-          <Personagem
-            key={a.id}
-            ator={a}
-            estado={estado}
-            falando={falandoId === a.id}
-            calado={Boolean(falandoId) && falandoId !== a.id}
-            falaId={palco.fala?.id}
-          />
+          <Personagem key={a.id} ator={a} estado={estado} falando={destaque?.id === a.id} calado={Boolean(destaque) && destaque?.id !== a.id} />
         ))}
         {saindo.map((a) => <Personagem key={a.id} ator={a} estado={estado} falando={false} calado={false} saindo />)}
       </div>
-      {palco.fala && ativo ? <CaixaFala fala={palco.fala} /> : null}
+      {destaque && ativo ? (
+        <div className="vn-placa" key={destaque.id} style={{ '--cor': destaque.cor } as CSSProperties}>
+          <b>{dadosVivos(destaque, estado).nome}</b>
+          <i className="vn-canto c1" /><i className="vn-canto c4" />
+        </div>
+      ) : null}
     </div>
   );
 }

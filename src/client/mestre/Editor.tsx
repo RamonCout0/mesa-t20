@@ -238,6 +238,17 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
           {novo || doBestiario ? null : (
             <div className="esq">
               {heroi ? null : <Botao icone="duplicar" texto="Duplicar" onClick={() => { enviar({ tipo: 'duplicar', id: ent!.id }); fechar(); }} />}
+              {heroi || (ent as Inimigo).chefeFinal ? null : (
+                <Botao
+                  icone="coroa"
+                  texto="Tornar chefe final"
+                  title="Ameaças de Arton, p. 370: dobra o PV, +2 PM por ND, Maior que a Morte, RD 5/10/20 pelo patamar e ND +2 (dá para desfazer)"
+                  onClick={async () => {
+                    if (!confirm(`Transformar ${ent!.nome} em chefe final?`)) return;
+                    if (await enviar({ tipo: 'chefeFinal', id: ent!.id })) fechar();
+                  }}
+                />
+              )}
               {heroi ? null : (
                 <Botao
                   icone="caveira"

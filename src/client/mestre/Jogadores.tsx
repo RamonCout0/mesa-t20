@@ -6,6 +6,8 @@ import type { Estado, InfoServidor } from '../comum/tipos-cliente.ts';
 import { enviarArquivo, postar } from '../comum/conexao.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { pin, usePainel } from './contexto.ts';
+import { EditorFicha } from '../comum/EditorFicha.tsx';
+import { baixarJson, nomeArquivo } from '../comum/arquivo.ts';
 import { Botao } from './Botao.tsx';
 
 const qr = (texto: string) => `/api/qr?texto=${encodeURIComponent(texto)}`;
@@ -18,14 +20,26 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
   const base = info.enderecos[0] ?? location.origin;
   const entrada = `${base}/jogador`;
 
+  const [editando, setEditando] = useState<string | null>(null);
   const acao = async (dados: Record<string, unknown>) => {
     const r = await postar('/api/mestre/ficha', dados, { 'x-pin': pin });
     if (!r.ok) avisar(r.erro ?? 'Algo deu errado.');
+    return r;
   };
+  const fichaEditada = fichas.find((f) => f.id === editando);
 
   const importar = async (arquivos: FileList) => {
     setEnviando(true);
     for (const f of [...arquivos]) {
+      // Ficha baixada daqui (arquivo .json): entra como ficha nova.
+      if (/\.json$/i.test(f.name) || f.type === 'application/json') {
+        try {
+          const dados = JSON.parse(await f.text());
+          const r = await acao({ acao: 'importarJson', ficha: dados.ficha ?? dados });
+          if (r.ok) avisar(`${f.name} importada.`, 'info');
+        } catch { avisar(`${f.name}: arquivo de ficha inválido.`); }
+        continue;
+      }
       const r = await enviarArquivo('/api/importar-ficha', f, { 'x-pin': pin });
       if (!r.ok) avisar(`${f.name}: ${r.erro}`);
       else avisar(`${f.name} importada.${(r.avisos as string[]).length ? ` ${(r.avisos as string[]).join(' ')}` : ''}`, 'info');
@@ -45,6 +59,17 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
             Quem já está na lista usa o QR do próprio personagem.</p>
           <div className="linha-botoes">
             <Botao classe="ouro" icone="arquivo" texto={enviando ? 'Importando…' : 'Importar PDF do Nimb'} onClick={() => pdf.current?.click()} disabled={enviando} />
+            <Botao
+              icone="mais"
+              texto="Ficha em branco"
+              title="Criar um personagem aqui mesmo, sem o Nimb"
+              onClick={async () => {
+                const nome = prompt('Nome do personagem:');
+                if (nome === null) return;
+                const r = await acao({ acao: 'nova', nome });
+                if (r.ok) setEditando(String(r.id));
+              }}
+            />
             <label className="check">
               <input
                 type="checkbox"
@@ -61,8 +86,32 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
               />
               Em combate, cada um só age na sua vez
             </label>
+            <label className="check">
+              <input
+                type="checkbox"
+                checked={estado.opcoes.fichaLivre}
+                onChange={(e) => enviar({ tipo: 'opcoes', opcoes: { fichaLivre: e.target.checked } })}
+              />
+              Jogadores editam a própria ficha
+            </label>
+            <label className="check" title="Regra da casa: ninguém morre direto. O golpe que derruba para no 0; só os danos seguintes descem até o limite de morte.">
+              <input
+                type="checkbox"
+                checked={estado.opcoes.zerarAntes}
+                onChange={(e) => enviar({ tipo: 'opcoes', opcoes: { zerarAntes: e.target.checked } })}
+              />
+              Ninguém morre direto (o golpe para no 0)
+            </label>
+            <label className="check" title="Regra do livro: o mestre faz um teste de Iniciativa só para todos os inimigos, usando o menor bônus entre eles.">
+              <input
+                type="checkbox"
+                checked={estado.opcoes.iniciativaUnica}
+                onChange={(e) => enviar({ tipo: 'opcoes', opcoes: { iniciativaUnica: e.target.checked } })}
+              />
+              Inimigos rolam iniciativa juntos
+            </label>
           </div>
-          <input ref={pdf} type="file" accept="application/pdf,.pdf" multiple hidden onChange={(e) => { if (e.target.files) importar(e.target.files); e.target.value = ''; }} />
+          <input ref={pdf} type="file" accept="application/pdf,.pdf,application/json,.json" multiple hidden onChange={(e) => { if (e.target.files) importar(e.target.files); e.target.value = ''; }} />
         </div>
       </div>
 
@@ -85,7 +134,7 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
                   <div className="ficha-numeros">
                     <span>PV <b>{f.pvMax}</b></span><span>PM <b>{f.pmMax}</b></span><span>Def <b>{f.defesa}</b></span>
                     {cd ? <span>CD <b>{cd}</b></span> : null}
-                    <span>{f.ataques.length} ataques · {f.magias.length} magias</span>
+                    <span>{f.ataques.length} ataques · {f.magias.length + (f.magiasProprias?.length ?? 0)} magias{f.itens?.length ? ` · ${f.itens.length} itens` : ''}</span>
                   </div>
                 </div>
                 <button type="button" className="ficha-qr" title="Mostrar o QR grande" onClick={() => setGrande({ titulo: f.nome, url, codigo: f.codigo })}>
@@ -94,6 +143,11 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
                 </button>
                 <div className="ficha-acoes">
                   {heroi ? <span className="tag-m vez">Na mesa</span> : <Botao classe="pequeno ouro" icone="mais" texto="Pôr na mesa" onClick={() => acao({ acao: 'naMesa', id: f.id })} />}
+                  <Botao classe="pequeno" icone="editar" texto="Editar" title="Editar a ficha (homebrew, itens, magias próprias…)" onClick={() => setEditando(f.id)} />
+                  <Botao classe="pequeno fantasma" icone="enviar" title="Baixar a ficha em arquivo (para guardar ou levar para outra mesa)" onClick={() => {
+                    const { codigo: _c, ...semCodigo } = f;
+                    baixarJson(`${nomeArquivo(f.nome)}.json`, { app: 'mesa-t20', ficha: semCodigo });
+                  }} />
                   <Botao classe="pequeno fantasma" icone="reiniciar" title="Gerar código novo (o celular antigo sai)" onClick={() => { if (confirm(`Gerar um código novo para ${f.nome}? O celular que usa o código atual vai sair.`)) acao({ acao: 'novoCodigo', id: f.id }); }} />
                   <Botao classe="pequeno fantasma perigo" icone="lixo" title="Remover ficha" onClick={() => { if (confirm(`Remover a ficha de ${f.nome}? Ela vai para data/fichas/lixeira/.`)) acao({ acao: 'remover', id: f.id }); }} />
                 </div>
@@ -121,6 +175,20 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
             ))}
           </div>
         </>
+      ) : null}
+
+      {fichaEditada ? (
+        <EditorFicha
+          key={fichaEditada.id}
+          ficha={fichaEditada}
+          completo
+          fechar={() => setEditando(null)}
+          salvar={async (patch) => {
+            const r = await acao({ acao: 'editar', id: fichaEditada.id, patch });
+            if (r.ok) avisar(`Ficha de ${fichaEditada.nome} salva.`, 'info');
+            return r.ok;
+          }}
+        />
       ) : null}
 
       {grande ? (

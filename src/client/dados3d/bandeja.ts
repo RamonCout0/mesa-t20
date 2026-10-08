@@ -24,6 +24,30 @@ interface DadoEmCena {
 }
 
 const suave = (t: number) => 1 - (1 - t) ** 3;
+/** Celular/tablet: menos pixels e sombra menor para nao engasgar. */
+const toque = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+
+/**
+ * Altura de um dado que cai e quica: queda livre ate a mesa e tres quiques cada vez menores.
+ * `t` vai de 0 a 1 dentro do trecho da queda; devolve a altura acima do ponto final.
+ */
+function quedaComQuiques(t: number, altura: number) {
+  const trechos = [
+    { dur: 0.42, h: altura, queda: true },
+    { dur: 0.24, h: 1.5 },
+    { dur: 0.16, h: 0.55 },
+    { dur: 0.1, h: 0.16 },
+  ];
+  let inicio = 0;
+  for (const tr of trechos) {
+    if (t < inicio + tr.dur) {
+      const u = (t - inicio) / tr.dur;
+      return tr.queda ? tr.h * (1 - u * u) : tr.h * 4 * u * (1 - u);
+    }
+    inicio += tr.dur;
+  }
+  return 0;
+}
 
 export class Bandeja {
   private readonly renderer: THREE.WebGLRenderer;
@@ -39,7 +63,7 @@ export class Bandeja {
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, toque ? 1.5 : 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -55,7 +79,7 @@ export class Bandeja {
     const sol = new THREE.DirectionalLight(0xffffff, 2.4);
     sol.position.set(-4, 12, 6);
     sol.castShadow = true;
-    sol.shadow.mapSize.set(1024, 1024);
+    sol.shadow.mapSize.set(toque ? 512 : 1024, toque ? 512 : 1024);
     Object.assign(sol.shadow.camera, { left: -8, right: 8, top: 8, bottom: -8 });
     this.cena.add(sol);
     const chao = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), new THREE.ShadowMaterial({ opacity: 0.35 }));
@@ -90,10 +114,10 @@ export class Bandeja {
 
   /**
    * Rola os dados e resolve quando todos param.
-   * `origem`: de onde o dado entra, de -1 (canto esquerdo) a 1 (direito) na beira de baixo da tela
-   * (no telao, a carta do heroi que lancou). Sem origem, entra por um dos lados.
+   * `origem`: de -1 (esquerda) a 1 (direita), o lado de quem lancou.
+   * Estilo `queda` (telao): o dado cai do alto na mesa e quica. Sem estilo, entra deslizando de um lado.
    */
-  rolar(lista: DadoParaRolar[], duracaoMs = 1700, origem?: number): Promise<void> {
+  rolar(lista: DadoParaRolar[], duracaoMs = 1700, origem?: number, estilo?: 'queda'): Promise<void> {
     cancelAnimationFrame(this.quadro);
     this.resolver?.();
     this.limpar();
@@ -102,7 +126,8 @@ export class Bandeja {
     // Ate 6 por fileira; muitos dados ficam menores.
     const porFila = Math.min(6, lista.length);
     const filas = Math.ceil(lista.length / porFila);
-    const escala = Math.max(0.45, Math.min(1, 3.2 / Math.max(porFila, filas * 1.4)));
+    const maximo = estilo === 'queda' ? 0.62 : 1;
+    const escala = Math.max(0.36, Math.min(maximo, (3.2 * maximo) / Math.max(porFila, filas * 1.4)));
     const espaco = 2.5 * escala;
     const larguraVisivel = Math.min(1, this.largura / 1.4);
     const cimaTela = new THREE.Vector3(0, 1, 0).applyQuaternion(this.camera.quaternion);
@@ -120,7 +145,10 @@ export class Bandeja {
         (linha - (filas - 1) / 2) * espaco * 1.05,
       );
       const lado = Math.random() < 0.5 ? -1 : 1;
-      const inicio = origem === undefined
+      const inicio = estilo === 'queda'
+        // Do alto, um pouco para tras e para o lado de quem lancou: cai na mesa vindo do topo da tela.
+        ? new THREE.Vector3(fim.x + (origem ?? 0) * 1.5 + (Math.random() - 0.5) * 1.2, 12 + Math.random() * 2, fim.z - 4.5 - Math.random() * 1.5)
+        : origem === undefined
         ? new THREE.Vector3(lado * (7 + Math.random() * 3), 4 + Math.random() * 2, 3 + Math.random() * 2)
         : new THREE.Vector3(origem * 6.5 * Math.max(1, this.largura / 1.6) + (Math.random() - 0.5), 3 + Math.random(), 8 + Math.random());
       const paraCamera = new THREE.Vector3().subVectors(this.camera.position, fim).normalize();
@@ -146,11 +174,17 @@ export class Bandeja {
         for (const d of this.dados) {
           const t = Math.min(1, Math.max(0, (agora - t0 - d.atraso) / duracaoMs));
           if (t < 1) terminou = false;
-          // Caminho: desliza ate o lugar e quica tres vezes, cada vez mais baixo.
-          const avanco = suave(Math.min(1, t * 1.25));
-          d.malha.position.lerpVectors(d.inicio, d.fim, avanco);
-          const quique = Math.abs(Math.sin(t * Math.PI * 3.2)) * (1 - t) ** 2 * 3.2;
-          d.malha.position.y = THREE.MathUtils.lerp(d.inicio.y, d.fim.y, Math.min(1, t * 2.2)) + quique;
+          if (estilo === 'queda') {
+            // Cai do alto (gravidade) e quica na mesa; anda um pouco para a frente ate parar.
+            d.malha.position.lerpVectors(d.inicio, d.fim, suave(Math.min(1, t * 1.15)));
+            d.malha.position.y = d.fim.y + quedaComQuiques(t, d.inicio.y - d.fim.y);
+          } else {
+            // Caminho: desliza ate o lugar e quica tres vezes, cada vez mais baixo.
+            const avanco = suave(Math.min(1, t * 1.25));
+            d.malha.position.lerpVectors(d.inicio, d.fim, avanco);
+            const quique = Math.abs(Math.sin(t * Math.PI * 3.2)) * (1 - t) ** 2 * 3.2;
+            d.malha.position.y = THREE.MathUtils.lerp(d.inicio.y, d.fim.y, Math.min(1, t * 2.2)) + quique;
+          }
           // Rolamento livre que desacelera e encaixa na face sorteada no fim.
           const giro = new THREE.Quaternion().setFromAxisAngle(d.eixo, d.voltas * Math.PI * 2 * suave(t));
           const rolando = d.qInicio.clone().premultiply(giro);
@@ -169,35 +203,37 @@ export class Bandeja {
     });
   }
 
-  /** Dados "na mao": giram no meio da tela esperando o jogador lancar. */
+  /** Dados "na mao": giram no lugar, no meio da tela, esperando o jogador lancar. */
   segurar(lista: { faces: number; modelo: string }[]) {
     cancelAnimationFrame(this.quadro);
     this.resolver?.();
     this.limpar();
     const n = Math.min(lista.length, 6);
-    const escala = n > 3 ? 0.7 : 1;
+    const escala = n > 3 ? 0.46 : n > 1 ? 0.58 : 0.66;
     this.dados = lista.slice(0, 6).map((d, i) => {
       const forma = formaDado(d.faces);
       const malha = new THREE.Mesh(forma.geometria, materiaisDoDado(d.modelo, forma.faces.map((f) => f.valor), d.faces));
       malha.castShadow = true;
       malha.scale.setScalar(escala * 1.25);
-      const fim = new THREE.Vector3((i - (n - 1) / 2) * 2.6 * escala, 2.2, 0.8);
+      const fim = new THREE.Vector3((i - (n - 1) / 2) * 3.2 * escala, 2.2, 0.8);
       malha.position.copy(fim);
       this.cena.add(malha);
       const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(Math.random() * 6, Math.random() * 6, Math.random() * 6));
       malha.quaternion.copy(q);
       return {
         malha, inicio: fim.clone(), fim, qInicio: q, qFim: q, escala,
-        eixo: new THREE.Vector3(Math.random() - 0.5, 1, Math.random() - 0.5).normalize(), voltas: 0, atraso: i * 0.7,
+        // Gira como um piao: eixo quase em pe, um pouco inclinado.
+        eixo: new THREE.Vector3((Math.random() - 0.5) * 0.5, 1, 0.35).normalize(), voltas: 0, atraso: i * 0.7,
       };
     });
     const t0 = performance.now();
     const girar = (agora: number) => {
       const t = (agora - t0) / 1000;
       for (const d of this.dados) {
-        const giro = new THREE.Quaternion().setFromAxisAngle(d.eixo, t * 2.6);
-        d.malha.quaternion.copy(d.qInicio).premultiply(giro);
-        d.malha.position.y = d.fim.y + Math.sin(t * 2.4 + d.atraso) * 0.25;
+        const giro = new THREE.Quaternion().setFromAxisAngle(d.eixo, t * 6.2 + d.atraso);
+        const balanco = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), Math.sin(t * 1.7 + d.atraso) * 0.18);
+        d.malha.quaternion.copy(d.qInicio).premultiply(giro).premultiply(balanco);
+        d.malha.position.y = d.fim.y + Math.sin(t * 2.4 + d.atraso) * 0.12;
       }
       this.renderer.render(this.cena, this.camera);
       this.quadro = requestAnimationFrame(girar);
@@ -206,7 +242,7 @@ export class Bandeja {
   }
 
   /** Os dados na mao saem voando para cima (para o telao). */
-  arremessar(duracaoMs = 520): Promise<void> {
+  arremessar(duracaoMs = 380): Promise<void> {
     cancelAnimationFrame(this.quadro);
     const partida = this.dados.map((d) => ({ d, p: d.malha.position.clone(), q: d.malha.quaternion.clone() }));
     return new Promise((resolve) => {

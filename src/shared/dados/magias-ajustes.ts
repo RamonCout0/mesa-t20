@@ -255,7 +255,7 @@ export const AJUSTES: Record<string, Ajuste> = {
   // ---------------- 4º circulo ----------------
   'alterar-memoria': { anim: ['mental', 'psiquico', 'memoria'] },
   'animar-objetos': { alvo: 'nenhum', anim: ['convocacao', 'arcano', 'objetos'] },
-  'assassino-fantasmagorico': { falhou: undefined, dano: undefined, tipoDano: undefined, sucesso: 'anula', anim: ['ilusao', 'trevas', 'espectro'], nota: 'Se falhar em Vontade, faz Fortitude: falhou, cai a –1 PV (morrendo); passou, sofre 6d6 de trevas.' },
+  'assassino-fantasmagorico': { morteInstantanea: true, falhou: undefined, dano: undefined, tipoDano: undefined, sucesso: 'anula', anim: ['ilusao', 'trevas', 'espectro'], nota: 'Se falhar em Vontade, faz Fortitude: falhou, cai a –1 PV (morrendo); passou, sofre 6d6 de trevas.' },
   'campo-antimagia': { anim: ['escudo', 'arcano', 'antimagia'] },
   'circulo-da-restauracao': {
     alvo: 'nenhum', anim: ['campo', 'luz', 'circulo-cura'], nota: 'Quem terminar o turno no círculo recupera 3d8+3 PV e 1 PM.',
@@ -312,10 +312,10 @@ export const AJUSTES: Record<string, Ajuste> = {
 
   // ---------------- 5º circulo ----------------
   'alterar-destino': { anim: ['adivinhacao', 'tempo', 'fios-destino'] },
-  aprisionamento: { falhou: [], nota: 'Falhou: o alvo é aprisionado (escolha a prisão). Passou: imune por uma semana.', anim: ['escudo', 'arcano', 'prisao'] },
+  aprisionamento: { morteInstantanea: true, falhou: [], nota: 'Falhou: o alvo é aprisionado (escolha a prisão). Passou: imune por uma semana.', anim: ['escudo', 'arcano', 'prisao'] },
   'aura-divina': { alvo: 'inimigos', falhou: [], anim: ['onda', 'ouro', 'aura-divina'], nota: 'Você e aliados ganham +5 ou +10 na Defesa e resistências; inimigos que falham recebem uma condição a sua escolha.' },
   'barragem-elemental-de-vectorius': { falhou: undefined, dano: '6d6', tipoDano: 'acido', dano2: '6d6', tipoDano2: 'eletricidade', anim: ['explosao', 'caos', 'esferas', 4], nota: 'Quatro esferas (ácido, eletricidade, fogo, frio): ajuste quem recebeu cada uma.' },
-  'buraco-negro': { alvo: 'inimigos', falhou: ['caido'], anim: ['campo', 'trevas', 'buraco-negro'], nota: 'Três turnos: quem falha é puxado 30m; quem termina no buraco desaparece.' },
+  'buraco-negro': { morteInstantanea: true, alvo: 'inimigos', falhou: ['caido'], anim: ['campo', 'trevas', 'buraco-negro'], nota: 'Três turnos: quem falha é puxado 30m; quem termina no buraco desaparece.' },
   'chuva-de-meteoros': { dano: '15d6', tipoDano: 'impacto', dano2: '15d6', tipoDano2: 'fogo', falhou: ['caido', 'agarrado'], anim: ['queda', 'fogo', 'meteoros'] },
   'controlar-o-tempo': { anim: ['tempo', 'tempo', 'relogio'] },
   'deflagracao-de-mana': { alvo: 'inimigos', dano: '150', tipoDano: 'essencia', res: 'fort', sucesso: 'metade', anim: ['explosao', 'arcano', 'estrela'], nota: 'Itens mágicos na área ficam mundanos.' },
@@ -341,9 +341,9 @@ export const AJUSTES: Record<string, Ajuste> = {
   'projetar-consciencia': { anim: ['teleporte', 'espirito', 'projecao'] },
   'reanimacao-impura': { alvo: 'qualquer', anim: ['convocacao', 'trevas', 'reanimar'] },
   requiem: { alvo: 'inimigos', anim: ['ilusao', 'tempo', 'requiem'], nota: 'No início de cada turno, quem falhar em Vontade repete as ações do turno anterior (–5 cumulativo).' },
-  'roubar-a-alma': { falhou: ['inconsciente', 'caido'], passou: ['abalado:1'], anim: ['dreno', 'espirito', 'alma'] },
+  'roubar-a-alma': { morteInstantanea: true, falhou: ['inconsciente', 'caido'], passou: ['abalado:1'], anim: ['dreno', 'espirito', 'alma'] },
   'segunda-chance': { alvo: 'aliado', maxAlvos: 1, falhou: undefined, cura: '200', remove: ['abalado', 'apavorado', 'alquebrado', 'atordoado', 'cego', 'confuso', 'debilitado', 'enjoado', 'envenenado', 'esmorecido', 'exausto', 'fascinado', 'fatigado', 'fraco', 'frustrado', 'lento', 'ofuscado', 'paralisado', 'pasmo', 'surdo'], anim: ['cura', 'fogo', 'fenix'] },
   semiplano: { alvo: 'nenhum', anim: ['teleporte', 'arcano', 'semiplano'] },
   'sombra-assassina': { anim: ['ilusao', 'trevas', 'sombra'], nota: 'A sombra repete contra o alvo toda ação hostil que ele fizer.' },
-  'toque-da-morte': { res: 'fort', sucesso: 'parcial', anim: ['toque', 'trevas', 'morte'], nota: 'Só pede Fortitude se o alvo tiver menos da metade dos PV; se falhar, vai a –10 PV.' },
+  'toque-da-morte': { morteInstantanea: true, res: 'fort', sucesso: 'parcial', anim: ['toque', 'trevas', 'morte'], nota: 'Só pede Fortitude se o alvo tiver menos da metade dos PV; se falhar, vai a –10 PV.' },
 };

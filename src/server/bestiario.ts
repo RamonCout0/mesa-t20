@@ -4,7 +4,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { CAMPOS_AMEACA, type Ameaca, type Estado, type Inimigo } from '../shared/tipos.ts';
-import { criar, novoId, num, txt } from './estado.ts';
+import { criar, novoId, num, tornarChefeFinal, txt } from './estado.ts';
 
 export class Bestiario {
   private readonly dir: string;
@@ -46,13 +46,13 @@ export class Bestiario {
   }
 
   /** Cria ou atualiza. Os campos passam pelos mesmos validadores das cartas da mesa. */
-  salvar(dados: Record<string, unknown>, id?: string) {
+  salvar(dados: Record<string, unknown>, id?: string, idNovo?: string) {
     const atual = id ? this.exigir(id) : undefined;
     const ent = criar('inimigos', { ...(atual ?? {}), ...dados }) as Inimigo;
     const agora = Date.now();
     const a = {
       ...Object.fromEntries(CAMPOS_AMEACA.map((c) => [c, ent[c]])),
-      id: atual?.id ?? novoId(),
+      id: atual?.id ?? idNovo ?? novoId(),
       texto: txt(dados.texto ?? atual?.texto, 6000),
       criadaEm: atual?.criadaEm ?? agora,
       atualizadaEm: agora,
@@ -91,6 +91,13 @@ export class Bestiario {
     return { novas, atualizadas, iguais };
   }
 
+  /** Ficha de ameaca vinda de um backup: mesmo id atualiza, senao cria com o id do arquivo. */
+  restaurar(dados: Record<string, unknown>) {
+    const id = String(dados.id ?? '');
+    if (this.todas.has(id)) return this.salvar(dados, id);
+    return this.salvar(dados, undefined, /^[\w-]{4,20}$/.test(id) ? id : undefined);
+  }
+
   /** Remover nao apaga: o arquivo vai para data/bestiario/lixeira/. */
   remover(id: string) {
     this.exigir(id);
@@ -101,7 +108,7 @@ export class Bestiario {
 }
 
 /** Uma carta de inimigo da ficha de ameaca. Com mais de uma, numera: "Cultista 1", "Cultista 2"... */
-export function porNaMesa(estado: Estado, a: Ameaca, quantidade: unknown, naTela: boolean) {
+export function porNaMesa(estado: Estado, a: Ameaca, quantidade: unknown, naTela: boolean, chefeFinal = false) {
   const qtd = num(quantidade, 1, 20);
   const iguais = () => estado.inimigos.filter((i) => i.nome === a.nome || i.nome.startsWith(`${a.nome} `));
   // Se ja havia um so, sem numero, ele vira o 1.
@@ -115,6 +122,7 @@ export function porNaMesa(estado: Estado, a: Ameaca, quantidade: unknown, naTela
     const dados = Object.fromEntries(CAMPOS_AMEACA.map((c) => [c, a[c]]));
     const ent = criar('inimigos', { ...dados, nome: numerar ? `${a.nome} ${n}` : a.nome, naTela }) as Inimigo;
     ent.ameacaId = a.id;
+    if (chefeFinal) tornarChefeFinal(ent);
     novos.push(ent);
   }
   estado.inimigos.push(...novos);

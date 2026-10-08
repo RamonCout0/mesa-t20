@@ -3,7 +3,7 @@ import { useEffect, useRef, type CSSProperties, type RefObject } from 'react';
 import type { DadoParaRolar } from './bandeja.ts';
 
 export interface ControleBandeja {
-  rolar: (dados: DadoParaRolar[], duracaoMs?: number, origem?: number) => Promise<void>;
+  rolar: (dados: DadoParaRolar[], duracaoMs?: number, origem?: number, estilo?: 'queda') => Promise<void>;
   segurar: (dados: { faces: number; modelo: string }[]) => void;
   arremessar: () => Promise<void>;
   limpar: () => void;
@@ -22,7 +22,7 @@ export function BandejaDados({ controle, classe, style }: Props) {
   useEffect(() => {
     const pronta = import('./bandeja.ts').then(({ Bandeja }) => new Bandeja(canvas.current!));
     controle.current = {
-      rolar: async (dados, duracaoMs, origem) => (await pronta).rolar(dados, duracaoMs, origem),
+      rolar: async (dados, duracaoMs, origem, estilo) => (await pronta).rolar(dados, duracaoMs, origem, estilo),
       segurar: (dados) => { pronta.then((b) => b.segurar(dados)); },
       arremessar: async () => (await pronta).arremessar(),
       limpar: () => { pronta.then((b) => b.limpar()); },

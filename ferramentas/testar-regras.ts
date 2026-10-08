@@ -1,15 +1,18 @@
-// Roteiro rapido do motor de regras: node ferramentas/testar-regras.ts <pdf de arcanista do Nimb>
+// Roteiro rapido do motor de regras: node ferramentas/testar-regras.ts <pdf de arcanista do Nimb ou data/fichas/<id>.json>
 import fs from 'node:fs';
 import { estadoDemo, buscar, tirarEfeitos } from '../src/server/estado.ts';
 import { importarPdfNimb } from '../src/server/importar-nimb.ts';
-import { resolverAtaque, resolverMagia, iniciarTurno, aplicarDano, type Contexto } from '../src/server/regras.ts';
+import { resolverAtaque, resolverMagia, resolverPoder, iniciarTurno, aplicarDano, type Contexto } from '../src/server/regras.ts';
 import type { Ficha } from '../src/shared/ficha.ts';
 import type { Heroi } from '../src/shared/tipos.ts';
 
 let falhas = 0;
 const confere = (nome: string, ok: boolean, detalhe = '') => { if (!ok) falhas += 1; console.log(ok ? 'ok   ' : 'FALHA', nome, detalhe); };
 
-const { ficha: dados } = await importarPdfNimb(new Uint8Array(fs.readFileSync(process.argv[2])));
+// Aceita o PDF do Nimb ou uma ficha ja salva (data/fichas/<id>.json).
+const dados = process.argv[2].endsWith('.json')
+  ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
+  : (await importarPdfNimb(new Uint8Array(fs.readFileSync(process.argv[2])))).ficha;
 const ficha = { ...dados, id: 'f1', codigo: 'TESTE1', criadaEm: 0, atualizadaEm: 0 } as Ficha;
 const estado = estadoDemo();
 const heroi = estado.aliados[1] as Heroi; // Lyra vira a ficha importada
@@ -65,11 +68,21 @@ confere('timer acabou no turno do conjurador', !cultista.condicoes.includes('ato
 
 // 6) PV negativo e morte do heroi: Aldric (62 PV) morre em -31
 const aldric = { ent: estado.aliados[0], lado: 'aliados' as const };
+// Regra do livro: o golpe ja leva o PV para o negativo.
+estado.opcoes.zerarAntes = false;
 aldric.ent.pv = 5;
 let d = aplicarDano(ctx, aldric, [{ valor: 20, tipo: 'corte' }]);
 confere('heroi cai inconsciente', d.caiu && aldric.ent.pv === -15 && aldric.ent.condicoes.includes('inconsciente'), `pv ${aldric.ent.pv}`);
 d = aplicarDano(ctx, aldric, [{ valor: 50, tipo: 'corte' }]);
 confere('heroi morre no limite', d.morreu && aldric.ent.pv === -31, `pv ${aldric.ent.pv}`);
+// Regra da casa: ninguem morre direto; o golpe que derruba para no 0.
+estado.opcoes.zerarAntes = true;
+aldric.ent.pv = 5;
+aldric.ent.condicoes = [];
+d = aplicarDano(ctx, aldric, [{ valor: 200, tipo: 'corte' }]);
+confere('regra da casa: para no 0', d.caiu && !d.morreu && aldric.ent.pv === 0, `pv ${aldric.ent.pv}`);
+d = aplicarDano(ctx, aldric, [{ valor: 12, tipo: 'corte' }]);
+confere('regra da casa: depois desce', aldric.ent.pv === -12 && !d.morreu, `pv ${aldric.ent.pv}`);
 
 // 7) RD e imunidade de inimigo
 const boss = buscar(estado, estado.inimigos[0].id)!;
@@ -89,6 +102,31 @@ const teia = estado.efeitos.find((e) => e.id === r.efeitoId);
 confere('teia fica na mesa e prende', Boolean(teia) && preso.condicoes.includes('enredado'), r.texto);
 tirarEfeitos(estado, (e) => e.id === teia?.id);
 confere('desfazer a teia solta o alvo', !preso.condicoes.includes('enredado') && !estado.efeitos.some((e) => e.id === teia?.id), preso.condicoes.join(','));
+
+// 9) Magia propria (homebrew) da ficha, lancada como jogador
+// (a ficha de teste pode nao ter nenhuma: cria uma so na memoria)
+ficha.magiasProprias = ficha.magiasProprias?.length ? ficha.magiasProprias : [{
+  id: 'propria-teste', nome: 'Lança de Brasas', circulo: 1, execucao: 'padrão', alcance: 'curto', duracao: 'instantânea', descricao: '',
+  efeito: { alvo: 'inimigo', maxAlvos: 1, dano: '3d6', tipoDano: 'fogo', res: 'ref', sucesso: 'metade', anim: { tipo: 'raio', elemento: 'fogo' } },
+}];
+const propria = ficha.magiasProprias[0];
+{
+  const alvo = estado.inimigos.find((i) => i.pv > 0 && i.naTela)!;
+  heroi.pm = heroi.pmMax;
+  fila = [1];
+  r = resolverMagia(ctx, heroi.id, { magiaId: propria.id, alvos: [alvo.id] }, true);
+  confere('magia propria lancada', r.titulo === propria.nome && r.anim.magia?.elemento === propria.efeito.anim.elemento, r.texto);
+}
+
+// 10) Poder com custo e bonus (Furia): gasta PM, fica ativo e soma no ataque e no dano
+ficha.poderes = [...ficha.poderes, { nome: 'Fúria', texto: '', pm: 2, bonus: { ataque: 2, dano: 2 } }];
+Object.assign(heroi, { pm: heroi.pmMax, pv: heroi.pvMax, condicoes: [] });
+r = resolverPoder(ctx, heroi.id, ficha.poderes.length - 1, [], true);
+confere('furia gasta PM e fica ativa', heroi.pm === heroi.pmMax - 2 && estado.efeitos.some((e) => e.nome === 'Fúria' && e.bonus?.ataque === 2), r.texto);
+const vivo = estado.inimigos.find((i) => i.pv > 0 && i.naTela)!;
+fila = [10, 1];
+const atq = resolverAtaque(ctx, heroi.id, ficha.ataques[0], vivo.id, {}, true);
+confere('furia soma no ataque', atq.rolagens[0].bonus === ficha.ataques[0].bonus + 2, `bonus ${atq.rolagens[0].bonus}`);
 
 console.log(falhas ? `${falhas} falha(s)` : 'tudo certo');
 process.exit(falhas ? 1 : 0);

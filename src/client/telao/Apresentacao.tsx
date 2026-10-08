@@ -15,6 +15,11 @@ const NOME_DESFECHO: Record<string, string> = {
 const TESTE: Record<string, string> = { fort: 'Fortitude', ref: 'Reflexos', von: 'Vontade' };
 const MAX_DADOS = 12;
 
+/** Avisa o servidor que o telao ja mostrou o resultado (o celular de quem agiu mostra o resumo). */
+function avisarApresentado(id: string) {
+  fetch('/api/apresentado', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
+}
+
 interface Faixa {
   autor: string;
   cor: string;
@@ -87,12 +92,13 @@ export function Apresentacao({ registrar, segurar, soltar, terminou }: Props) {
         if (elAutor) pulsar(elAutor, 'lancando', 900);
         const origem = (pAutor.x / innerWidth) * 2 - 1;
         somDados(dados.length);
-        await bandeja.current?.rolar(dados.map((d) => ({ faces: d.faces, valor: Math.abs(d.valor), modelo: r.dado })), 1450, origem);
+        await bandeja.current?.rolar(dados.map((d) => ({ faces: d.faces, valor: Math.abs(d.valor), modelo: r.dado })), 1600, origem, 'queda');
         setMostrarTotais(true);
         await m.esperar(r.tipo === 'rolagem' ? 1600 : 650);
         bandeja.current?.limpar();
       }
       if (r.tipo === 'rolagem') {
+        avisarApresentado(r.id);
         setFaixa(null);
         return;
       }
@@ -107,6 +113,7 @@ export function Apresentacao({ registrar, segurar, soltar, terminou }: Props) {
       const aoImpacto = (i: number) => {
         if (impactou.has(i)) return;
         impactou.add(i);
+        if (impactou.size === 1) avisarApresentado(r.id);
         const a = r.alvos[i];
         // Som do golpe: so nos dois primeiros alvos, para area nao virar barulho.
         if (impactou.size <= 2) {
@@ -137,6 +144,7 @@ export function Apresentacao({ registrar, segurar, soltar, terminou }: Props) {
       } finally {
         r.alvos.forEach((_, i) => aoImpacto(i));
       }
+      if (!r.alvos.length) avisarApresentado(r.id);
       if (r.autoCura && elAutor) flutuante(elAutor, 'cura', `+${r.autoCura}`);
       await m.esperar(900);
       setFaixa(null);

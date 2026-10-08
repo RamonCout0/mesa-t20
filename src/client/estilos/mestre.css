@@ -1178,17 +1178,22 @@ body[data-aba="cena"] .efeitos-m { display: none !important; }
 }
 .palco-m::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, transparent 55%, rgba(0, 0, 0, 0.55)); }
 .palco-vazio { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: var(--suave); font-size: 13px; text-align: center; padding: 20px; }
-.ator-m {
+.ator-m { position: absolute; width: 0; height: 0; transition: left 300ms var(--ease-suave), top 300ms var(--ease-suave); }
+.ator-m:active { transition: none; }
+.ator-corpo {
   position: absolute;
-  bottom: 24%;
+  left: 0;
+  bottom: 0;
   translate: -50% 0;
+  transform-origin: 50% 100%;
+  scale: var(--escala, 1);
   display: grid;
   justify-items: center;
   gap: 4px;
   cursor: grab;
-  transition: left 300ms var(--ease-suave);
+  transition: scale 300ms var(--ease-suave), filter 300ms;
 }
-.ator-m:active { cursor: grabbing; transition: none; }
+.ator-m:active .ator-corpo { cursor: grabbing; transition: none; }
 .ator-m .retrato {
   width: clamp(54px, 9vw, 96px);
   aspect-ratio: 3 / 4;
@@ -1200,14 +1205,7 @@ body[data-aba="cena"] .efeitos-m { display: none !important; }
 .ator-m span { padding: 1px 8px; border-radius: 6px; background: rgba(9, 6, 13, 0.85); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .ator-m.sel .retrato { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--cor), 0 0 18px var(--cor); }
 .ator-m.falando span { background: var(--cor); color: #fff; text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6); }
-.fala-m {
-  position: absolute; left: 4%; right: 4%; bottom: 4%; z-index: 20;
-  display: grid; gap: 2px; padding: 8px 12px; border-radius: 9px;
-  background: rgba(12, 8, 18, 0.88); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.4);
-  font-size: 12px; pointer-events: none;
-}
-.fala-m b { color: var(--cor); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
-.fala-m span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.ator-m.calado .ator-corpo { filter: brightness(0.55); }
 
 .ator-barra {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 50px; padding: 8px 12px;
@@ -1217,15 +1215,10 @@ body[data-aba="cena"] .efeitos-m { display: none !important; }
 .ator-barra .deco { flex: 1; }
 .ator-barra.vazia { justify-content: center; }
 
-.compositor { display: grid; gap: 10px; padding: 14px; border-radius: 14px; background: linear-gradient(180deg, var(--superficie-2), var(--superficie)); box-shadow: inset 0 0 0 1px var(--linha-forte); }
-.compositor textarea {
-  min-height: 84px; resize: vertical; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--linha-forte);
-  background: rgba(8, 5, 12, 0.6); color: var(--texto); font: 15px/1.5 var(--fonte-titulo);
-}
-.compositor textarea:focus { outline: 2px solid rgba(232, 195, 122, 0.5); outline-offset: 0; }
-.compositor .linha-botoes .deco { flex: 1; }
-.compositor label.check { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--suave); cursor: pointer; }
-.quem-fala { display: flex; flex-wrap: wrap; gap: 6px; }
+.quem-fala { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.quem-fala .rotulo-quem { margin-right: 4px; }
+.ator-barra .expressao { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--suave); }
+.ator-barra .expressao select { height: 30px; max-width: 170px; }
 .chip-fala, .chip-entrar {
   --cor: var(--ouro);
   display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 12px 0 4px; border-radius: 9px;
@@ -1237,12 +1230,6 @@ body[data-aba="cena"] .efeitos-m { display: none !important; }
 .chip-entrar:hover:not(:disabled) { border-color: var(--cor); }
 .chip-entrar:disabled { opacity: 0.4; cursor: default; }
 .chip-entrar.inimigo { --cor: var(--inimigo); }
-
-.falas-m { list-style: none; margin: 0; padding: 10px; max-height: 260px; overflow-y: auto; display: grid; gap: 6px; border-radius: 12px; background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linha); }
-.falas-m li { display: grid; grid-template-columns: auto auto minmax(0, 1fr); gap: 8px; align-items: baseline; font-size: 13px; }
-.falas-m time { color: var(--apagado); font: 11px var(--fonte-num); }
-.falas-m b { color: var(--cor); white-space: nowrap; }
-.falas-m li.narracao span { font-style: italic; color: var(--suave); }
 
 .cena-lado h3 { margin: 4px 0 0; font: 600 17px var(--fonte-titulo); color: var(--ouro-claro); }
 .grupo-entrar { display: grid; gap: 8px; }
@@ -1299,3 +1286,71 @@ body[data-aba="cena"] .efeitos-m { display: none !important; }
 .fechar-teste:hover { background: rgba(255, 77, 109, 0.18); color: var(--perigo); }
 .fechar-teste .ico { width: 13px; height: 13px; }
 body[data-aba="bestiario"] .testes-m, body[data-aba="galeria"] .testes-m { display: none !important; }
+.chip-fala:not(:has(.retrato)) { padding: 0 12px; }
+
+/* ---------------- segredos (mensagens secretas) ---------------- */
+.gaveta {
+  position: fixed; top: 0; right: 0; bottom: 0; z-index: 60; width: min(440px, 100vw);
+  display: flex; flex-direction: column; overflow-y: auto;
+  background: linear-gradient(180deg, rgba(24, 17, 34, 0.98), rgba(12, 9, 18, 0.98));
+  border-left: 1px solid var(--borda); box-shadow: -18px 0 40px rgba(0, 0, 0, 0.5);
+  transform: translateX(105%); transition: transform 0.28s var(--ease-suave);
+}
+.gaveta.aberto { transform: none; }
+.gaveta > header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; gap: 8px; padding: 14px 14px 10px; background: rgba(20, 14, 29, 0.97); border-bottom: 1px solid var(--linha); }
+.gaveta > header h3 { margin: 0; font: 600 18px var(--fonte-titulo); color: var(--ouro-claro); }
+.gaveta > header .deco { flex: 1; }
+.compor-segredo { display: grid; gap: 10px; padding: 14px; border-bottom: 1px solid var(--linha); }
+.compor-segredo textarea { min-height: 90px; resize: vertical; padding: 10px 12px; border-radius: 10px; font: 14px/1.45 var(--fonte); }
+.anexo { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.anexo select { height: 30px; flex: 1; min-width: 140px; }
+.previa-anexo { position: relative; }
+.previa-anexo img { display: block; max-width: 100%; max-height: 160px; border-radius: 10px; box-shadow: 0 0 0 1px var(--linha-forte); }
+.previa-anexo .btn { position: absolute; top: 6px; right: 6px; background: rgba(9, 6, 13, 0.85); }
+.lista-segredos { list-style: none; margin: 0; padding: 12px; display: grid; gap: 10px; }
+.lista-segredos > li { display: grid; gap: 8px; padding: 11px 12px; border-radius: 12px; background: var(--superficie); border: 1px solid var(--linha); }
+.lista-segredos > li.no-telao { border-color: rgba(232, 195, 122, 0.6); box-shadow: 0 0 16px rgba(232, 195, 122, 0.15); }
+.seg-topo { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--suave); }
+.seg-topo time { color: var(--apagado); font-family: var(--fonte-num); }
+.seg-corpo { display: grid; gap: 6px; }
+.seg-corpo img { max-width: 100%; max-height: 140px; border-radius: 8px; justify-self: start; }
+.seg-corpo p { margin: 0; font-size: 14px; line-height: 1.45; white-space: pre-wrap; }
+.seg-lidas { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; color: var(--apagado); }
+.seg-lidas span { padding: 2px 7px; border-radius: 6px; background: var(--superficie-3); }
+.seg-lidas span.lida { color: #b8f5d2; background: rgba(79, 209, 139, 0.14); }
+.seg-respostas { margin: 0; padding: 8px 10px; list-style: none; display: grid; gap: 4px; border-radius: 8px; background: rgba(232, 195, 122, 0.08); font-size: 13px; }
+.seg-respostas b { color: var(--ouro); }
+.seg-respostas time { color: var(--apagado); font: 11px var(--fonte-num); }
+.seg-botoes { display: flex; align-items: center; gap: 6px; }
+.seg-botoes .deco { flex: 1; }
+.chip-chefe {
+  display: inline-flex; align-items: center; gap: 5px; height: 30px; padding: 0 9px; border-radius: 8px;
+  border: 1px solid var(--linha-forte); background: var(--superficie-3); color: var(--suave); font: 600 12px var(--fonte); cursor: pointer;
+}
+.chip-chefe .ico { width: 14px; height: 14px; }
+.chip-chefe.on { border-color: var(--ouro); background: rgba(232, 195, 122, 0.18); color: var(--ouro-claro); }
+
+/* ---------------- encontros e cenas prontos ---------------- */
+.encontros { display: grid; gap: 10px; padding: 14px; border-radius: 16px; background: var(--superficie); box-shadow: inset 0 0 0 1px var(--linha); }
+.encontros > header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.encontros h3 { margin: 0; font: 600 17px var(--fonte-titulo); color: var(--ouro-claro); }
+.encontros .deco { flex: 1; }
+.lista-encontros { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.encontro { display: grid; gap: 6px; padding: 10px 12px; border-radius: 12px; background: var(--superficie-2); box-shadow: inset 0 0 0 1px var(--linha-forte); }
+.encontro b { font: 600 15px var(--fonte-titulo); color: var(--texto); }
+.encontro small { color: var(--suave); font-size: 12px; line-height: 1.4; }
+.encontro .linha-botoes { gap: 6px; }
+.encontro .deco { flex: 1; }
+.cenas-salvas { display: grid; gap: 6px; }
+.cena-salva { position: relative; }
+.cena-salva-abrir {
+  width: 100%; display: grid; gap: 2px; padding: 10px 40px 10px 12px; border-radius: 10px; border: 1px solid var(--linha-forte);
+  background: linear-gradient(90deg, rgba(12, 8, 18, 0.92), rgba(12, 8, 18, 0.55)), var(--superficie-3) center / cover no-repeat;
+  color: var(--texto); text-align: left; cursor: pointer;
+}
+.cena-salva-abrir:hover { border-color: var(--ouro); }
+.cena-salva-abrir b { font: 600 14px var(--fonte-titulo); }
+.cena-salva-abrir small { color: var(--suave); font-size: 11px; }
+.cena-salva-x { position: absolute; top: 50%; right: 6px; translate: 0 -50%; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: rgba(9, 6, 13, 0.6); color: var(--suave); cursor: pointer; }
+.cena-salva-x:hover { color: var(--perigo); }
+.cena-salva-x .ico { width: 14px; height: 14px; }

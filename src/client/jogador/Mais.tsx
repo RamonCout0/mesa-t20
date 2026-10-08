@@ -1,14 +1,19 @@
 // Aba "Mais": pericias, poderes, equipamento, anotacoes, atualizar a ficha e sair.
 import { useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { EditorFicha } from '../comum/EditorFicha.tsx';
+import { baixarJson, nomeArquivo } from '../comum/arquivo.ts';
 import { PERICIAS } from '../../shared/ficha.ts';
 import { NOME_ATRIBUTO, ATRIBUTOS, type Atributo } from '../../shared/tipos.ts';
 import { enviarArquivo, postar } from '../comum/conexao.ts';
 import { Icone } from '../comum/Icone.tsx';
 import type { PropsAba } from './Jogo.tsx';
 
-export function Mais({ ficha, codigo, avisar, sair }: PropsAba & { sair: () => void }) {
+export function Mais({ ficha, codigo, avisar, sair, estado }: PropsAba & { sair: () => void }) {
   const pdf = useRef<HTMLInputElement>(null);
   const [enviando, setEnviando] = useState(false);
+  const [editando, setEditando] = useState(false);
+  const fichaLivre = estado?.opcoes.fichaLivre ?? true;
   const pericias = PERICIAS.filter((p) => ficha.pericias[p]);
 
   const salvar = async (patch: Record<string, unknown>) => {
@@ -26,6 +31,24 @@ export function Mais({ ficha, codigo, avisar, sair }: PropsAba & { sair: () => v
 
   return (
     <main>
+      <button type="button" className="j-btn ouro largo editar-ficha" onClick={() => setEditando(true)}>
+        <Icone nome="editar" />{fichaLivre ? 'Editar ficha (itens, magias, poderes…)' : 'Anotações da ficha'}
+      </button>
+      {editando ? createPortal(
+        <EditorFicha
+          ficha={ficha}
+          completo={fichaLivre}
+          fechar={() => setEditando(false)}
+          salvar={async (patch) => {
+            const r = await postar('/api/jogador/ficha', patch, { 'x-codigo': codigo });
+            if (!r.ok) avisar(r.erro ?? 'Não consegui salvar.');
+            else avisar('Ficha salva.', 'info');
+            return r.ok;
+          }}
+        />,
+        document.body,
+      ) : null}
+
       <div className="j-secao"><h3>Perícias</h3><span className="deco" /></div>
       <div className="pericias">
         {pericias.map((p) => {
@@ -43,6 +66,15 @@ export function Mais({ ficha, codigo, avisar, sair }: PropsAba & { sair: () => v
           <div className="j-secao"><h3>Poderes</h3><span className="conta">{ficha.poderes.length}</span><span className="deco" /></div>
           <div className="j-lista">
             {ficha.poderes.map((p) => <div key={p.nome} className="poder"><b>{p.nome}</b><p className="j-texto">{p.texto}</p></div>)}
+          </div>
+        </>
+      ) : null}
+
+      {ficha.itens?.length ? (
+        <>
+          <div className="j-secao"><h3>Itens mágicos</h3><span className="conta">{ficha.itens.length}</span><span className="deco" /></div>
+          <div className="j-lista">
+            {ficha.itens.map((p, i) => <div key={i} className="poder"><b>{p.nome}</b><p className="j-texto">{p.texto}</p></div>)}
           </div>
         </>
       ) : null}
@@ -80,6 +112,12 @@ export function Mais({ ficha, codigo, avisar, sair }: PropsAba & { sair: () => v
       <div className="j-lista">
         <button type="button" className="j-btn largo" disabled={enviando} onClick={() => pdf.current?.click()}>
           <Icone nome="arquivo" />{enviando ? 'Lendo…' : 'Atualizar ficha (novo PDF do Nimb)'}
+        </button>
+        <button type="button" className="j-btn largo" onClick={() => {
+          const { codigo: _c, ...semCodigo } = ficha;
+          baixarJson(`${nomeArquivo(ficha.nome)}.json`, { app: 'mesa-t20', ficha: semCodigo });
+        }}>
+          <Icone nome="enviar" />Baixar minha ficha (arquivo)
         </button>
         <input ref={pdf} type="file" accept="application/pdf,.pdf" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) atualizar(f); e.target.value = ''; }} />
         <button type="button" className="j-btn perigo largo" onClick={() => { if (confirm('Sair deste personagem neste celular? Para voltar você vai precisar do código.')) sair(); }}>

@@ -4,12 +4,12 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { CONDICAO_POR_ID, TEMAS, TIERS, REVELAR, EFEITOS } from '../shared/condicoes.ts';
-import { limiteDeMorte } from '../shared/modificadores.ts';
+import { pvDepoisDoDano } from '../shared/modificadores.ts';
 import type {
   Estado, Heroi, Inimigo, Entidade, Lado, Evento, EventoValor, EstadoPublico, InimigoPublico, FichaOrdem, Habilidade, Ataque,
-  Ator, Cena, Fala, Palco,
+  Ator, Cena, Palco,
 } from '../shared/tipos.ts';
 import { TIPOS_DANO } from '../shared/tipos.ts';
 import type { EfeitoAtivo } from '../shared/acoes.ts';
@@ -130,9 +130,9 @@ export function criar(lado: Lado, dados: Record<string, unknown> = {}): Entidade
 
 // ---------------- estado inicial (demonstracao) ----------------
 
-const OPCOES_PADRAO = { importarPeloCelular: true, acaoSoNaVez: false, falasPeloCelular: true };
-export const palcoVazio = (): Palco => ({ fundo: '', atores: [], fala: null, falas: [] });
-const cenaVazia = (): Cena => ({ modo: 'combate', bossId: null, idInvocacao: '', mostrar: null, palco: palcoVazio() });
+const OPCOES_PADRAO = { importarPeloCelular: true, acaoSoNaVez: false, fichaLivre: true, zerarAntes: true, iniciativaUnica: true };
+export const palcoVazio = (): Palco => ({ fundo: '', atores: [], destaque: null });
+const cenaVazia = (): Cena => ({ modo: 'combate', bossId: null, idInvocacao: '', mostrar: null, palco: palcoVazio(), revelacao: null });
 
 export function estadoDemo(): Estado {
   const heroi = (d: Record<string, unknown>) => criar('aliados', d) as Heroi;
@@ -189,7 +189,7 @@ export function migrar(bruto: unknown): Estado | null {
     versao: 3,
     aliados,
     inimigos,
-    cena: { ...cenaVazia(), ...(e.cena ?? {}), palco: { ...palcoVazio(), ...(e.cena?.palco ?? {}) } },
+    cena: { ...cenaVazia(), ...(e.cena ?? {}), palco: migrarPalco(e.cena?.palco) },
     turnos: { ativo: false, rodada: 1, atual: null, ...(e.turnos ?? {}) },
     opcoes: { ...OPCOES_PADRAO, ...(e.opcoes ?? {}) },
     efeitos: Array.isArray(e.efeitos) ? e.efeitos : [],
@@ -248,14 +248,17 @@ export function buscar(estado: Estado, id: string): { ent: Entidade; lado: Lado 
   return null;
 }
 
-// Ordem de turno: quem tem iniciativa, do maior para o menor (empate: ordem da lista).
+// Ordem de turno: quem tem iniciativa, do maior para o menor. Empate: maior bonus de Iniciativa
+// age primeiro; persistindo, os herois antes dos inimigos (e depois a ordem da lista).
 export function ordemDeTurno(estado: Estado) {
   return [
     ...estado.aliados.map((ent) => ({ ent: ent as Entidade, lado: 'aliados' as Lado })),
     ...estado.inimigos.map((ent) => ({ ent: ent as Entidade, lado: 'inimigos' as Lado })),
   ]
     .filter(({ ent }) => ent.iniciativa !== null && ent.iniciativa !== undefined)
-    .sort((a, b) => (b.ent.iniciativa ?? 0) - (a.ent.iniciativa ?? 0));
+    .sort((a, b) => (b.ent.iniciativa ?? 0) - (a.ent.iniciativa ?? 0)
+      || (b.ent.bonusIni ?? 0) - (a.ent.bonusIni ?? 0)
+      || (a.lado === b.lado ? 0 : a.lado === 'aliados' ? -1 : 1));
 }
 
 export const visivelParaTodos = (estado: Estado, ent: Inimigo) => ent.naTela || ent.id === estado.cena.bossId;
@@ -331,13 +334,13 @@ function alvos(estado: Estado, ids: unknown) {
   return lista;
 }
 
-function aplicarValor({ ent, lado }: { ent: Entidade; lado: Lado }, modo: EventoValor['tipo'], valor: number, eventos: Evento[]) {
+function aplicarValor({ ent, lado }: { ent: Entidade; lado: Lado }, modo: EventoValor['tipo'], valor: number, eventos: Evento[], zerarAntes: boolean) {
   const evento: EventoValor = { tipo: modo, alvo: ent.id, lado, nome: ent.nome, valor };
   if (modo === 'dano') {
     const absorvido = Math.min(ent.pvTemp, valor);
     ent.pvTemp -= absorvido;
     const antes = ent.pv;
-    ent.pv = Math.max(limiteDeMorte(ent.pvMax), ent.pv - (valor - absorvido));
+    ent.pv = pvDepoisDoDano(ent.pv, valor - absorvido, ent.pvMax, lado === 'aliados', zerarAntes);
     if (antes > 0 && ent.pv <= 0) {
       evento.caiu = true;
       if (lado === 'aliados') for (const c of ['inconsciente', 'sangrando']) if (!ent.condicoes.includes(c)) ent.condicoes.push(c);
@@ -381,10 +384,11 @@ const MODOS_VALOR: EventoValor['tipo'][] = ['dano', 'cura', 'temp', 'pmGasta', '
 
 // ---------------- palco do modo cena ----------------
 
-/** Lugar livre no palco: o centro, depois o meio do maior vao entre quem ja esta la. */
+/** Lugar livre no palco: o centro, depois o meio do maior vao entre quem ja esta na frente. */
 function lugarLivre(p: Palco) {
-  if (!p.atores.length) return 50;
-  const xs = [8, ...p.atores.map((a) => a.x).sort((a, b) => a - b), 92];
+  const naFrente = p.atores.filter((a) => a.y >= 70);
+  if (!naFrente.length) return 50;
+  const xs = [8, ...naFrente.map((a) => a.x).sort((a, b) => a - b), 92];
   let melhor = { vao: -1, x: 50 };
   for (let i = 1; i < xs.length; i++) {
     const vao = xs[i] - xs[i - 1];
@@ -393,12 +397,26 @@ function lugarLivre(p: Palco) {
   return melhor.x;
 }
 
-/** Espalha todo mundo por igual, mantendo a ordem da esquerda para a direita. */
+const Y_FRENTE = 90;
+
+/** Em fila: todo mundo na frente, espalhado por igual, mantendo a ordem da esquerda para a direita. */
 function organizar(p: Palco) {
   const ordem = [...p.atores].sort((a, b) => a.x - b.x);
   const n = ordem.length;
   ordem.forEach((a, i) => {
     a.x = n === 1 ? 50 : Math.round(12 + (76 * i) / (n - 1));
+    a.y = Y_FRENTE;
+  });
+}
+
+/** Em roda (ex.: em volta de uma mesa): numa elipse, os de tras menores. Comeca pela frente. */
+function emRoda(p: Palco) {
+  const n = p.atores.length;
+  const ordem = [...p.atores].sort((a, b) => a.x - b.x);
+  ordem.forEach((a, i) => {
+    const ang = Math.PI / 2 + (2 * Math.PI * i) / Math.max(1, n); // pi/2 = frente
+    a.x = Math.round(50 + 34 * Math.cos(ang));
+    a.y = Math.round(72 + 18 * Math.sin(ang));
   });
 }
 
@@ -409,30 +427,51 @@ export function novoAtor(estado: Estado, a: Record<string, unknown>): Ator {
   if (a.refId) {
     const { ent, lado } = alvos(estado, a.refId)[0];
     if (p.atores.some((y) => y.refId === ent.id)) throw new Error(`${ent.nome} já está na cena.`);
-    return { id: novoId(), refId: ent.id, nome: ent.nome, imagem: ent.imagem, cor: lado === 'aliados' ? (ent as Heroi).cor : '#ff6b4a', x, espelhar: x > 50 };
+    return { id: novoId(), refId: ent.id, nome: ent.nome, imagem: ent.imagem, cor: lado === 'aliados' ? (ent as Heroi).cor : '#ff6b4a', x, y: Y_FRENTE, espelhar: x > 50, expressao: '' };
   }
   return {
     id: novoId(), refId: null, nome: txt(a.nome, 40) || 'NPC', imagem: imagemValida(a.imagem),
-    cor: corValida(a.cor, '#c9b8ff'), x, espelhar: x > 50,
+    cor: corValida(a.cor, '#c9b8ff'), x, y: Y_FRENTE, espelhar: x > 50, expressao: '',
   };
 }
 
-/** Poe uma fala na caixa de dialogo. Texto vazio limpa a caixa. */
-export function falar(estado: Estado, atorId: string | null, texto: unknown, nomeNarrador = '', jogador = false) {
-  const p = estado.cena.palco;
-  const t = String(texto ?? '').trim().slice(0, 600);
-  if (!t) {
-    p.fala = null;
-    return;
+/** Palco de versoes anteriores (que tinha caixa de dialogo) vira o palco atual. */
+function migrarPalco(bruto: Partial<Palco> | undefined): Palco {
+  const atores = (Array.isArray(bruto?.atores) ? bruto.atores : []).map((a) => ({ ...a, y: a.y ?? Y_FRENTE, expressao: a.expressao ?? '' }));
+  return { fundo: bruto?.fundo ?? '', atores, destaque: atores.some((a) => a.id === bruto?.destaque) ? bruto!.destaque! : null };
+}
+
+// ---------------- chefe final (Ameacas de Arton, p. 370) ----------------
+
+/** "ND 1/2" -> 0.5, "ND 7" -> 7, "ND S" -> 20. */
+export function valorNd(nd: string) {
+  const m = /(\d+)\s*\/\s*(\d+)|(\d+)|S/i.exec(nd);
+  if (!m) return 0;
+  if (m[1]) return Number(m[1]) / Number(m[2]);
+  if (m[3]) return Number(m[3]);
+  return 20;
+}
+
+/** Patamar pelo ND (mesma divisao dos niveis: 1-4, 5-10, 11-16, 17+). */
+export const patamarDoNd = (nd: number) => (nd >= 17 ? 'lenda' : nd >= 11 ? 'campeao' : nd >= 5 ? 'veterano' : 'iniciante');
+
+/** Dobra o PV, +2 PM por ND, Maior que a Morte, RD 5/10/20 (veterano/campeao/lenda) e ND +2. */
+export function tornarChefeFinal(i: Inimigo) {
+  if (i.chefeFinal) throw new Error(`${i.nome} já é chefe final.`);
+  const nd = valorNd(i.nd);
+  i.pvMax *= 2;
+  i.pv = Math.min(i.pvMax, i.pv * 2);
+  if (i.pmMax) {
+    const pm = Math.round(2 * nd);
+    i.pmMax += pm;
+    i.pm += pm;
   }
-  const ator = atorId ? p.atores.find((x) => x.id === atorId) : null;
-  if (atorId && !ator) throw new Error('Esse personagem não está na cena.');
-  const fala: Fala = {
-    id: novoId(), atorId: ator?.id ?? null, nome: ator?.nome ?? nomeNarrador, cor: ator?.cor ?? '#e8c37a', texto: t, em: Date.now(),
-    ...(jogador ? { jogador: true } : {}),
-  };
-  p.fala = fala;
-  p.falas = [...p.falas, fala].slice(-40);
+  if (!i.habilidades.some((h) => /maior que a morte/i.test(h.nome))) i.habilidades = [...i.habilidades, { nome: 'Maior que a Morte', ativa: true }];
+  const rd = { veterano: 5, campeao: 10, lenda: 20, iniciante: 0 }[patamarDoNd(nd)];
+  if (rd) i.rd = { ...i.rd, geral: (i.rd.geral ?? 0) + rd };
+  if (i.nd) i.nd = `ND ${nd < 1 ? 2 : Math.round(nd) + 2}${/S/i.test(i.nd) ? '+' : ''}`;
+  if (i.tier === 'comum') i.tier = 'epico';
+  i.chefeFinal = true;
 }
 
 const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void> = {
@@ -440,7 +479,7 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
     const modo = MODOS_VALOR.includes(a.modo as EventoValor['tipo']) ? (a.modo as EventoValor['tipo']) : 'dano';
     const valor = num(a.valor, 0, 9999);
     if (!valor) throw new Error('Informe um valor maior que zero.');
-    for (const alvo of alvos(estado, a.ids)) aplicarValor(alvo, modo, valor, eventos);
+    for (const alvo of alvos(estado, a.ids)) aplicarValor(alvo, modo, valor, eventos, estado.opcoes.zerarAntes);
   },
 
   definir(estado, a) {
@@ -541,18 +580,34 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
         p.atores.push(novoAtor(estado, a));
         break;
       }
-      case 'mover': ator().x = num(a.x, 0, 100); break;
+      case 'mover': {
+        const x = ator();
+        x.x = num(a.x, 0, 100);
+        if (a.y !== undefined) x.y = num(a.y, 0, 100);
+        break;
+      }
       case 'espelhar': { const x = ator(); x.espelhar = !x.espelhar; break; }
       case 'frente': { const x = ator(); p.atores = [...p.atores.filter((y) => y !== x), x]; break; }
-      case 'sair': { const x = ator(); p.atores = p.atores.filter((y) => y !== x); break; }
+      case 'sair': {
+        const x = ator();
+        p.atores = p.atores.filter((y) => y !== x);
+        if (p.destaque === x.id) p.destaque = null;
+        break;
+      }
+      // Clicar em quem ja esta em destaque tira o destaque.
+      case 'destacar': p.destaque = a.atorId && p.destaque !== a.atorId ? ator().id : null; break;
+      case 'expressao': {
+        const x = ator();
+        const img = a.imagem ? imagemValida(a.imagem) : '';
+        if (a.imagem && !img) throw new Error('Imagem inválida.');
+        x.expressao = img;
+        break;
+      }
       case 'organizar': organizar(p); break;
-      case 'limpar': p.atores = []; p.fala = null; break;
+      case 'roda': emRoda(p); break;
+      case 'limpar': p.atores = []; p.destaque = null; break;
       default: throw new Error('Ação de cena desconhecida.');
     }
-  },
-
-  fala(estado, a) {
-    falar(estado, a.atorId ? String(a.atorId) : null, a.texto, txt(a.nome, 40));
   },
 
   // Imagem em destaque no telao ("mostrar aos jogadores"). Trocar so o titulo nao reabre a animacao.
@@ -572,6 +627,19 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
     eventos.push({ tipo: 'fx', efeito: String(a.efeito) });
   },
 
+  /** Tira todos os inimigos da mesa de uma vez (um desfazer so). */
+  limparInimigos(estado) {
+    estado.inimigos = [];
+    estado.cena.bossId = null;
+    if (estado.turnos.atual && !estado.aliados.some((h) => h.id === estado.turnos.atual)) estado.turnos.atual = null;
+  },
+
+  chefeFinal(estado, a) {
+    const { ent, lado } = alvos(estado, a.id)[0];
+    if (lado !== 'inimigos') throw new Error('Só inimigos viram chefe final.');
+    tornarChefeFinal(ent as Inimigo);
+  },
+
   descanso(estado) {
     for (const h of estado.aliados) {
       h.pv = h.pvMax;
@@ -589,10 +657,20 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
 
   rolarIniciativa(estado, a) {
     const ids = Array.isArray(a.ids) ? a.ids : [];
-    const lista = ids.length ? alvos(estado, ids) : [...estado.aliados, ...estado.inimigos].map((ent) => ({ ent }));
-    for (const { ent } of lista) {
-      if (a.somenteVazios && ent.iniciativa !== null) continue;
-      ent.iniciativa = 1 + Math.floor(Math.random() * 20) + (ent.bonusIni ?? 0);
+    const lista = (ids.length ? alvos(estado, ids) : [
+      ...estado.aliados.map((ent) => ({ ent: ent as Entidade, lado: 'aliados' as Lado })),
+      ...estado.inimigos.map((ent) => ({ ent: ent as Entidade, lado: 'inimigos' as Lado })),
+    ]).filter(({ ent }) => !(a.somenteVazios && ent.iniciativa !== null));
+    const d20 = () => randomInt(1, 21);
+    // Regra do livro: os inimigos fazem um teste so, com o menor bonus entre eles.
+    const inimigos = lista.filter(({ lado }) => lado === 'inimigos');
+    if (estado.opcoes.iniciativaUnica && inimigos.length) {
+      const valor = d20() + Math.min(...inimigos.map(({ ent }) => ent.bonusIni ?? 0));
+      for (const { ent } of inimigos) ent.iniciativa = valor;
+    }
+    for (const { ent, lado } of lista) {
+      if (lado === 'inimigos' && estado.opcoes.iniciativaUnica) continue;
+      ent.iniciativa = d20() + (ent.bonusIni ?? 0);
     }
   },
 
@@ -628,7 +706,9 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
     const o = (a.opcoes ?? {}) as Record<string, unknown>;
     if (o.importarPeloCelular !== undefined) estado.opcoes.importarPeloCelular = Boolean(o.importarPeloCelular);
     if (o.acaoSoNaVez !== undefined) estado.opcoes.acaoSoNaVez = Boolean(o.acaoSoNaVez);
-    if (o.falasPeloCelular !== undefined) estado.opcoes.falasPeloCelular = Boolean(o.falasPeloCelular);
+    if (o.fichaLivre !== undefined) estado.opcoes.fichaLivre = Boolean(o.fichaLivre);
+    if (o.zerarAntes !== undefined) estado.opcoes.zerarAntes = Boolean(o.zerarAntes);
+    if (o.iniciativaUnica !== undefined) estado.opcoes.iniciativaUnica = Boolean(o.iniciativaUnica);
   },
 };
 
@@ -641,4 +721,4 @@ export function executar(estado: Estado, acao: Acao): Evento[] {
   return eventos;
 }
 
-export const ACAO_SEM_HISTORICO = new Set(['fx', 'palco', 'fala']);
+export const ACAO_SEM_HISTORICO = new Set(['fx', 'palco']);

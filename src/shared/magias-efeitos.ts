@@ -70,6 +70,8 @@ export interface EfeitoMagia {
   remove?: string[];
   /** O dano e perda de vida: ignora RD e imunidade a tipo. */
   perda?: boolean;
+  /** Efeito de morte instantanea (Assassino Fantasmagorico, Roubar a Alma...): Maior que a Morte protege. */
+  morteInstantanea?: boolean;
   /** Fica marcado no telao ate acabar ou ser dissipada. */
   persistente?: 'sustentada' | 'cena' | 'rodadas' | 'longa';
   anim: Anim;

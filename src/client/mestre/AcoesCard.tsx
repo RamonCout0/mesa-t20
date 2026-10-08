@@ -4,9 +4,8 @@ import { useState } from 'react';
 import type { Ataque, Entidade, Estado, Inimigo, Lado, TipoDano } from '../comum/tipos-cliente.ts';
 import { TIPOS_DANO, NOME_DANO } from '../../shared/tipos.ts';
 import { CONDICOES } from '../../shared/condicoes.ts';
-import type { Ficha } from '../../shared/ficha.ts';
-import { buscarMagia } from '../../shared/magias.ts';
-import { efeitoDaMagia } from '../../shared/magias-efeitos.ts';
+import { poderUsavel, type Ficha } from '../../shared/ficha.ts';
+import { acharMagia, efeitoNaFicha, magiasDaFicha } from '../../shared/magias-proprias.ts';
 import { expressaoValida } from '../../shared/rolagem.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { usePainel } from './contexto.ts';
@@ -15,7 +14,8 @@ import { Botao } from './Botao.tsx';
 type Modo =
   | { tipo: 'ataque'; ataque: Ataque }
   | { tipo: 'habilidade' }
-  | { tipo: 'magia'; magiaId: string };
+  | { tipo: 'magia'; magiaId: string }
+  | { tipo: 'poder'; lista: 'poderes' | 'itens'; indice: number };
 
 interface Props {
   ent: Entidade;
@@ -34,16 +34,20 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
   const [hab, setHab] = useState({ nome: '', dano: '', tipoDano: '' as TipoDano | '', res: 'ref', cd: 15, sucesso: 'metade', condicao: '' });
   const heroi = lado === 'aliados';
   const ataques = heroi ? ficha?.ataques ?? [] : (ent as Inimigo).ataques;
-  const magias = heroi ? (ficha?.magias ?? []).map((id) => buscarMagia(id)).filter(Boolean) : [];
+  const magias = heroi && ficha ? magiasDaFicha(ficha) : [];
+  const poderes = heroi && ficha
+    ? (['poderes', 'itens'] as const).flatMap((lista) => (ficha[lista] ?? []).map((p, indice) => ({ p, indice, lista })).filter(({ p }) => poderUsavel(p)))
+    : [];
+  const poderDoModo = modo?.tipo === 'poder' ? ficha?.[modo.lista]?.[modo.indice] : undefined;
 
-  if (!ataques.length && !magias.length && heroi) return null;
+  if (!ataques.length && !magias.length && !poderes.length && heroi) return null;
 
   // Alvos sugeridos: o lado oposto primeiro.
   const oposto = (heroi ? estado.inimigos : estado.aliados) as Entidade[];
   const mesmo = (heroi ? estado.aliados : estado.inimigos) as Entidade[];
-  const multiplos = modo?.tipo === 'habilidade' || (modo?.tipo === 'magia' && (() => {
-    const m = buscarMagia(modo.magiaId);
-    return m ? efeitoDaMagia(m).maxAlvos !== 1 : false;
+  const multiplos = modo?.tipo === 'habilidade' || (modo?.tipo === 'poder' && (poderDoModo?.efeito?.maxAlvos ?? 1) !== 1) || (modo?.tipo === 'magia' && (() => {
+    const m = acharMagia(ficha, modo.magiaId);
+    return m ? efeitoNaFicha(ficha, m).maxAlvos !== 1 : false;
   })());
 
   const escolher = (id: string) => {
@@ -56,6 +60,7 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
     let ok = false;
     if (modo.tipo === 'ataque') ok = await enviar({ tipo: 'atacarComo', autorId: ent.id, ataqueId: modo.ataque.id, alvoId: ids[0], extras: { bonus } });
     else if (modo.tipo === 'magia') ok = await enviar({ tipo: 'magiaComo', autorId: ent.id, magiaId: modo.magiaId, alvos: ids });
+    else if (modo.tipo === 'poder') ok = await enviar({ tipo: 'poderComo', autorId: ent.id, lista: modo.lista, indice: modo.indice, alvos: ids });
     else {
       ok = await enviar({
         tipo: 'habilidade', autorId: ent.id, alvos: ids,
@@ -65,9 +70,9 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
     if (ok) { setModo(null); setAlvos([]); setBonus(0); }
   }
 
-  const precisaAlvo = modo?.tipo !== 'magia' || (() => {
-    const m = buscarMagia(modo.magiaId);
-    return m ? !['si', 'nenhum'].includes(efeitoDaMagia(m).alvo) : true;
+  const precisaAlvo = modo?.tipo === 'poder' ? Boolean(poderDoModo?.efeito && !['si', 'nenhum'].includes(poderDoModo.efeito.alvo)) : modo?.tipo !== 'magia' || (() => {
+    const m = acharMagia(ficha, modo.magiaId);
+    return m ? !['si', 'nenhum'].includes(efeitoNaFicha(ficha, m).alvo) : true;
   })();
 
   return (
@@ -84,7 +89,17 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
         {magias.length ? (
           <select className="chip-select" value={modo?.tipo === 'magia' ? modo.magiaId : ''} onChange={(e) => { setModo(e.target.value ? { tipo: 'magia', magiaId: e.target.value } : null); setAlvos([]); }}>
             <option value="">✨ Magia…</option>
-            {magias.map((m) => <option key={m!.id} value={m!.id}>{m!.nome} ({m!.circulo}º)</option>)}
+            {magias.map((m) => <option key={m.id} value={m.id}>{m.nome} ({m.circulo}º)</option>)}
+          </select>
+        ) : null}
+        {poderes.length ? (
+          <select className="chip-select" value={modo?.tipo === 'poder' ? `${modo.lista}:${modo.indice}` : ''} onChange={(e) => {
+            const [lista, indice] = e.target.value.split(':');
+            setModo(e.target.value ? { tipo: 'poder', lista: lista as 'poderes' | 'itens', indice: Number(indice) } : null);
+            setAlvos([]);
+          }}>
+            <option value="">⚡ Poder / item…</option>
+            {poderes.map(({ p, indice, lista }) => <option key={`${lista}:${indice}`} value={`${lista}:${indice}`}>{p.nome}{p.pm ? ` (${p.pm} PM)` : ''}</option>)}
           </select>
         ) : null}
         {!heroi ? (
@@ -137,7 +152,7 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
           {multiplos ? <Botao classe="ouro pequeno" icone="check" texto={`Usar em ${alvos.length}`} disabled={!alvos.length} onClick={() => executar(alvos)} /> : null}
         </div>
       ) : null}
-      {modo && !precisaAlvo ? <Botao classe="ouro pequeno" icone="varinha" texto="Lançar" onClick={() => executar([])} /> : null}
+      {modo && !precisaAlvo ? <Botao classe="ouro pequeno" icone="varinha" texto={modo.tipo === 'poder' ? 'Usar' : 'Lançar'} onClick={() => executar([])} /> : null}
     </div>
   );
 }

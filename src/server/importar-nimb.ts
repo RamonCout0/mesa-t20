@@ -206,6 +206,8 @@ export async function importarPdfNimb(dados: Uint8Array): Promise<ResultadoImpor
       ataques: lerAtaques(c),
       magias,
       magiasExtras: extras,
+      magiasProprias: [],
+      itens: [],
       atributoChave,
       bonusCd: fortalecimento,
       rd: lerRd(lido.texto),

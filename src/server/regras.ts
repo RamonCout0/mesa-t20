@@ -9,13 +9,14 @@ import { randomInt } from 'node:crypto';
 import type { Estado, Entidade, Heroi, Inimigo, Lado, Ataque, TipoDano } from '../shared/tipos.ts';
 import { NOME_DANO } from '../shared/tipos.ts';
 import type { Ficha } from '../shared/ficha.ts';
-import { CUSTO_CIRCULO, cdMagia, limitePm } from '../shared/ficha.ts';
-import { buscarMagia, type Magia } from '../shared/magias.ts';
-import { efeitoDaMagia, type EfeitoMagia, type Resistencia, type Uso } from '../shared/magias-efeitos.ts';
+import { CUSTO_CIRCULO, cdMagia, limitePm, poderUsavel } from '../shared/ficha.ts';
+import type { Magia } from '../shared/magias.ts';
+import type { EfeitoMagia, Resistencia, Uso } from '../shared/magias-efeitos.ts';
+import { acharMagia, efeitoNaFicha, fichaConhece } from '../shared/magias-proprias.ts';
 import {
   rolar, multiplicarDados, somarExpressao, maisDadosIguais, lerExpressao, type Sorteio, type Rolada,
 } from '../shared/rolagem.ts';
-import { expandir, limiteDeMorte, modAtaque, modDefesa, modPericia, modResistencia } from '../shared/modificadores.ts';
+import { expandir, limiteDeMorte, modAtaque, modDefesa, modPericia, modResistencia, pvDepoisDoDano } from '../shared/modificadores.ts';
 import type {
   AlvoResultado, Autor, EfeitoAtivo, ParteDano, ResultadoAcao, RolagemExibida, Temporizador,
 } from '../shared/acoes.ts';
@@ -107,7 +108,7 @@ export function aplicarDano(ctx: Contexto, alvo: Alvo, partes: ParteDano[]): Dan
   const absorvido = Math.min(ent.pvTemp, total);
   ent.pvTemp -= absorvido;
   const limite = limiteDeMorte(ent.pvMax);
-  ent.pv = Math.max(limite, ent.pv - (total - absorvido));
+  ent.pv = pvDepoisDoDano(ent.pv, total - absorvido, ent.pvMax, alvo.lado === 'aliados', ctx.estado.opcoes.zerarAntes);
   const caiu = antes > 0 && ent.pv <= 0;
   const morreu = alvo.lado === 'aliados' && ent.pv <= limite && antes > limite;
   if (alvo.lado === 'aliados' && ent.pv <= 0) {
@@ -200,6 +201,20 @@ export interface ExtrasAtaque {
   arremessar?: boolean;
 }
 
+/** Soma dos bonus dos efeitos ativos sobre alguem (poderes como a Furia, magias de protecao). */
+export function bonusAtivos(estado: Estado, entId: string) {
+  const b = { ataque: 0, dano: 0, defesa: 0 };
+  for (const e of estado.efeitos) {
+    if (!e.bonus) continue;
+    const sobre = e.alvos.includes(entId) || (e.conjuradorId === entId && !e.alvos.length);
+    if (!sobre) continue;
+    b.ataque += e.bonus.ataque ?? 0;
+    b.dano += e.bonus.dano ?? 0;
+    b.defesa += e.bonus.defesa ?? 0;
+  }
+  return b;
+}
+
 export function resolverAtaque(ctx: Contexto, autorId: string, ataque: Ataque, alvoId: string, extras: ExtrasAtaque, ehJogador: boolean): ResultadoAcao {
   const { estado } = ctx;
   const sorteio = ctx.sorteio ?? sorteioSeguro;
@@ -211,10 +226,12 @@ export function resolverAtaque(ctx: Contexto, autorId: string, ataque: Ataque, a
 
   const distancia = ataque.distancia || Boolean(extras.arremessar && ataque.arremessavel);
   const bonusSituacao = Math.max(-20, Math.min(20, Math.trunc(extras.bonus ?? 0)));
-  const modCond = modAtaque(autor.ent.condicoes, distancia);
+  // Condicoes e poderes/magias ativos (Furia, Escudo da Fe...) entram sozinhos.
+  const ativoAutor = bonusAtivos(estado, autor.ent.id);
+  const modCond = modAtaque(autor.ent.condicoes, distancia) + ativoAutor.ataque;
   const d20 = rolar('1d20', sorteio);
   const total = d20.total + ataque.bonus + bonusSituacao + modCond;
-  const defesa = alvo.ent.defesa + modDefesa(alvo.ent.condicoes, distancia);
+  const defesa = alvo.ent.defesa + modDefesa(alvo.ent.condicoes, distancia) + bonusAtivos(estado, alvo.ent.id).defesa;
   const acertou = total >= defesa;
   const imuneCritico = alvo.lado === 'inimigos' && (alvo.ent as Inimigo).imunidades.some((i) => /cr[ií]tico/i.test(i));
   const critico = acertou && d20.total >= ataque.margem && !imuneCritico;
@@ -229,7 +246,7 @@ export function resolverAtaque(ctx: Contexto, autorId: string, ataque: Ataque, a
     const expr = critico ? multiplicarDados(ataque.dano, ataque.mult) : ataque.dano;
     const dano = rolar(expr, sorteio);
     rolagens.push(exibir(critico ? `Dano crítico (x${ataque.mult})` : 'Dano', dano));
-    let valor = Math.max(1, dano.total);
+    let valor = Math.max(1, dano.total + ativoAutor.dano);
     if (extras.danoExtra?.trim()) {
       const extra = rolar(extras.danoExtra, sorteio);
       rolagens.push(exibir('Dano extra', extra));
@@ -262,6 +279,10 @@ interface EfeitoParaAplicar extends Omit<EfeitoMagia, 'anim' | 'persistente' | '
 }
 
 /** Aplica o efeito de uma magia (ou uso, ou habilidade de ameaca) nos alvos. */
+const maiorQueAMorte = (alvo: Alvo) => alvo.lado === 'inimigos'
+  && (alvo.ent as Inimigo).habilidades.some((h) => /maior que a morte/i.test(h.nome))
+  && alvo.ent.pv * 2 >= alvo.ent.pvMax;
+
 function aplicarEfeito(ctx: Contexto, autor: Alvo, e: EfeitoParaAplicar, alvos: Alvo[], cd: number | null, rolagens: RolagemExibida[]): AlvoResultado[] {
   const { estado } = ctx;
   const sorteio = ctx.sorteio ?? sorteioSeguro;
@@ -283,6 +304,11 @@ function aplicarEfeito(ctx: Contexto, autor: Alvo, e: EfeitoParaAplicar, alvos: 
   const resultados: AlvoResultado[] = [];
   for (const alvo of alvos) {
     const r: AlvoResultado = { id: alvo.ent.id, nome: alvo.ent.nome, lado: alvo.lado, desfecho: 'efeito', pvAntes: alvo.ent.pv };
+    // Maior que a Morte (chefe final): com metade dos PV ou mais, ignora morte instantanea.
+    if (e.morteInstantanea && maiorQueAMorte(alvo)) {
+      resultados.push({ ...r, desfecho: 'imune', carimbo: 'Maior que a Morte' });
+      continue;
+    }
     let passou = false;
     if (e.res && cd !== null) {
       const mod = modResistencia(alvo.ent.condicoes, e.res);
@@ -424,9 +450,9 @@ export function resolverMagia(ctx: Contexto, heroiId: string, pedido: PedidoMagi
   exigirAcordado(autor.ent);
   const heroi = autor.ent as Heroi;
   const ficha = ctx.fichaDe(heroi);
-  const m = buscarMagia(pedido.magiaId);
+  const m = acharMagia(ficha, pedido.magiaId);
   if (!m) throw new Error('Magia desconhecida.');
-  if (ehJogador && ficha && !ficha.magias.includes(m.id)) throw new Error('Essa magia não está na sua ficha.');
+  if (ehJogador && ficha && !fichaConhece(ficha, m.id)) throw new Error('Essa magia não está na sua ficha.');
 
   const escolhidos = lerAprimoramentos(m, pedido.aprimoramentos ?? {});
   const truque = escolhidos.some(({ i }) => m.aprimoramentos[i].truque);
@@ -436,7 +462,7 @@ export function resolverMagia(ctx: Contexto, heroiId: string, pedido: PedidoMagi
   if (custo - alquebrado > limite) throw new Error(`Você pode gastar no máximo ${limite} PM numa magia (seu nível).`);
   if (custo > heroi.pm) throw new Error(`PM insuficientes: precisa de ${custo}, tem ${heroi.pm}.`);
 
-  const efeito = efeitoComAprimoramentos(m, efeitoDaMagia(m), escolhidos);
+  const efeito = efeitoComAprimoramentos(m, efeitoNaFicha(ficha, m), escolhidos);
   const alvos = validarAlvos(estado, efeito, autor, pedido.alvos, ehJogador);
   const cd = ficha ? cdMagia(ficha) : 10 + Math.floor(heroi.nivel / 2);
   heroi.pm -= custo;
@@ -483,12 +509,12 @@ export function resolverUso(ctx: Contexto, autorId: string, efeitoId: string, in
   const ativo = estado.efeitos.find((x) => x.id === efeitoId);
   if (!ativo) throw new Error('Esse efeito já acabou.');
   if (ehJogador && ativo.conjuradorId !== autorId) throw new Error('Esse efeito não é seu.');
-  const m = buscarMagia(ativo.magiaId);
-  const uso: Uso | undefined = m ? efeitoDaMagia(m).usos?.[indice] : undefined;
-  if (!m || !uso) throw new Error('Esse efeito não tem esse uso.');
   const autor = exigir(estado, ativo.conjuradorId);
-  checarVez(estado, autor.ent.id, ehJogador);
   const ficha = autor.lado === 'aliados' ? ctx.fichaDe(autor.ent as Heroi) : undefined;
+  const m = acharMagia(ficha, ativo.magiaId);
+  const uso: Uso | undefined = m ? efeitoNaFicha(ficha, m).usos?.[indice] : undefined;
+  if (!m || !uso) throw new Error('Esse efeito não tem esse uso.');
+  checarVez(estado, autor.ent.id, ehJogador);
   const cd = ficha ? cdMagia(ficha) : 10 + Math.floor(((autor.ent as Heroi).nivel ?? 1) / 2);
   const alvos = validarAlvos(estado, { alvo: uso.alvo, maxAlvos: uso.maxAlvos ?? 0 }, autor, alvoIds, ehJogador);
   const rolagens: RolagemExibida[] = [];
@@ -548,6 +574,59 @@ export function resolverRolagem(ctx: Contexto, autorId: string, expressao: strin
   };
 }
 
+// ---------------- poderes da ficha ----------------
+
+/**
+ * Usar um poder da ficha pelo celular: gasta PM (com o limite pelo nivel), aplica o efeito que o grupo
+ * definiu (dano, cura, condicao) e, se tiver bonus ou durar, fica ativo na mesa ate acabar.
+ */
+export function resolverPoder(ctx: Contexto, heroiId: string, indice: number, alvoIds: string[], ehJogador: boolean, lista: 'poderes' | 'itens' = 'poderes'): ResultadoAcao {
+  const { estado } = ctx;
+  const autor = exigir(estado, heroiId);
+  if (autor.lado !== 'aliados') throw new Error('Só heróis usam poderes da ficha.');
+  checarVez(estado, heroiId, ehJogador);
+  exigirAcordado(autor.ent);
+  const heroi = autor.ent as Heroi;
+  const ficha = ctx.fichaDe(heroi);
+  const p = ficha?.[lista]?.[indice];
+  if (!ficha || !p || !poderUsavel(p)) throw new Error(lista === 'itens' ? 'Item não encontrado na ficha.' : 'Poder não encontrado na ficha.');
+  const alquebrado = p.pm && heroi.condicoes.includes('alquebrado') ? 1 : 0;
+  const custo = (p.pm ?? 0) + alquebrado;
+  if ((p.pm ?? 0) > limitePm(ficha)) throw new Error(`Você pode gastar no máximo ${limitePm(ficha)} PM numa habilidade (seu nível).`);
+  if (custo > heroi.pm) throw new Error(`PM insuficientes: precisa de ${custo}, tem ${heroi.pm}.`);
+
+  const efeito = p.efeito ?? { alvo: 'si' as const, maxAlvos: 1, anim: { tipo: 'aura' as const, elemento: 'ouro' as const } };
+  const alvos = validarAlvos(estado, efeito, autor, alvoIds, ehJogador);
+  const cd = cdMagia(ficha) ?? 10 + Math.floor(ficha.nivel / 2) + Math.max(...Object.values(ficha.atributos));
+  heroi.pm -= custo;
+  const rolagens: RolagemExibida[] = [];
+  const resultados = aplicarEfeito(ctx, autor, { ...efeito, sucesso: efeito.res ? efeito.sucesso ?? 'metade' : undefined }, alvos, cd, rolagens);
+
+  // Bonus ou duracao: fica ativo (o mesmo poder do mesmo heroi nao acumula).
+  const temBonus = Boolean(p.bonus && (p.bonus.ataque || p.bonus.dano || p.bonus.defesa));
+  let efeitoId: string | undefined;
+  if (temBonus || efeito.persistente) {
+    const chave = `poder:${p.nome}`;
+    tirarEfeitos(estado, (x) => x.magiaId === chave && x.conjuradorId === heroi.id);
+    const ativo: EfeitoAtivo = {
+      id: novoId(), magiaId: chave, nome: p.nome, conjuradorId: heroi.id, alvos: alvos.map((a) => a.ent.id),
+      persistente: efeito.persistente ?? 'cena', criadoEm: Date.now(), elemento: efeito.anim.elemento,
+      ...(temBonus ? { bonus: p.bonus } : {}),
+      ...(efeito.persistente === 'rodadas' ? { rodadas: 1 } : {}),
+    };
+    estado.efeitos.push(ativo);
+    efeitoId = ativo.id;
+  }
+  const bonusTexto = temBonus ? [p.bonus!.ataque && `${sinal(p.bonus!.ataque)} ataque`, p.bonus!.dano && `${sinal(p.bonus!.dano)} dano`, p.bonus!.defesa && `${sinal(p.bonus!.defesa)} Defesa`].filter(Boolean).join(', ') : '';
+  return {
+    id: novoId(), criadoEm: Date.now(), tipo: 'uso', autor: autorDe(autor), titulo: p.nome,
+    subtitulo: [custo ? `${custo} PM` : lista === 'itens' ? 'Item' : 'Poder', bonusTexto].filter(Boolean).join(' · '),
+    dado: dadoDe(ctx, autor), rolagens, alvos: resultados, anim: { magia: efeito.anim }, pmGasto: custo,
+    texto: `${heroi.nome} usa ${p.nome}${custo ? ` (${custo} PM)` : ''}${bonusTexto ? `: ${bonusTexto} enquanto durar` : ''}${resultados.length && resultados[0].id !== heroi.id ? ` → ${resultados.map((r) => r.nome).join(', ')}` : ''}.`,
+    ...(efeitoId ? { efeitoId } : {}),
+  };
+}
+
 // ---------------- testes pedidos pelo mestre ----------------
 
 /** Resposta a um teste pedido pelo mestre: d20 + pericia da ficha (com as condicoes). */
@@ -558,6 +637,10 @@ export function resolverTeste(ctx: Contexto, heroiId: string, pedidoId: string):
   if (p.respostas[heroiId]) throw new Error('Esse teste já foi rolado.');
   const alvo = exigir(ctx.estado, heroiId);
   const heroi = alvo.ent as Heroi;
+  // Desacordado nao faz teste de pericia; resistencia (Fortitude contra veneno etc.) continua valendo.
+  if (expandir(heroi.condicoes).has('inconsciente') && !['Fortitude', 'Reflexos', 'Vontade'].includes(p.pericia)) {
+    throw new Error(`${heroi.nome} está inconsciente e não pode fazer esse teste.`);
+  }
   const per = ctx.fichaDe(heroi)?.pericias[p.pericia];
   const base = per?.total ?? (p.pericia === 'Iniciativa' ? heroi.bonusIni : 0);
   const bonus = base + (per ? modPericia(heroi.condicoes, per.atributo) : 0);

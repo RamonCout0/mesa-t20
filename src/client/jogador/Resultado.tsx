@@ -11,8 +11,18 @@ const NOME_DESFECHO: Record<string, string> = {
 };
 const TESTE: Record<string, string> = { fort: 'Fortitude', ref: 'Reflexos', von: 'Vontade' };
 
-/** Tempo que o telao leva para mostrar a rolagem e o golpe (dados + efeito). */
-const TEMPO_TELAO = { comDados: 3000, semDados: 1700 };
+/** Se o telao nao avisar que mostrou (aba fechada, rede ruim), o resumo aparece mesmo assim. */
+const ESPERA_MAXIMA_TELAO = 9000;
+
+/** Espera o telao mostrar a acao `id` (ou o tempo maximo). */
+function esperarTelao(id: string) {
+  return new Promise<void>((resolve) => {
+    const fim = () => { removeEventListener('mesa-apresentado', ouvir); clearTimeout(t); resolve(); };
+    const ouvir = (e: Event) => { if ((e as CustomEvent<string>).detail === id) fim(); };
+    const t = setTimeout(fim, ESPERA_MAXIMA_TELAO);
+    addEventListener('mesa-apresentado', ouvir);
+  });
+}
 
 function linhaAlvo(a: AlvoResultado) {
   return [
@@ -80,12 +90,13 @@ export function Lancamento({ pedido, modelo, enviar, avisar }: {
       return;
     }
     setFase('telao');
-    setTimeout(() => {
-      setFase('resumo');
-      const critico = res.alvos.some((a) => a.desfecho === 'critico');
-      const acertou = res.alvos.some((a) => a.desfecho === 'acerto' || a.desfecho === 'critico');
-      navigator.vibrate?.(critico ? [60, 40, 140] : acertou ? 50 : 20);
-    }, pedido.dados.length ? TEMPO_TELAO.comDados : TEMPO_TELAO.semDados);
+    // O resumo aparece junto com o golpe no telao (ou logo, se nao houver telao aberto).
+    if (r.telaoAberto) await esperarTelao(res.id);
+    else await new Promise((ok) => setTimeout(ok, 600));
+    setFase('resumo');
+    const critico = res.alvos.some((a) => a.desfecho === 'critico');
+    const acertou = res.alvos.some((a) => a.desfecho === 'acerto' || a.desfecho === 'critico');
+    navigator.vibrate?.(critico ? [60, 40, 140] : acertou ? 50 : 20);
   };
 
   // Sem dados (magia sem rolagem do jogador): ja manda.

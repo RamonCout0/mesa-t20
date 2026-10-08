@@ -117,6 +117,8 @@ export interface EfeitoAtivo {
   elemento?: Elemento;
   /** Condicoes que o efeito impos em cada alvo; saem quando ele acaba. */
   impostas?: Record<string, string[]>;
+  /** Bonus enquanto dura (poder ativo, como a Furia). */
+  bonus?: { ataque?: number; dano?: number; defesa?: number };
 }
 
 /** Condicao que acaba sozinha depois de algumas rodadas. */

@@ -1,7 +1,7 @@
 // Telao: o que todo mundo ve. Herois embaixo, boss no centro, capangas nos flancos,
 // ordem de turno no topo e a imagem que o mestre mostrar.
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import type { EstadoPublico, Evento, Heroi, InimigoPublico, Mostrar, Turnos, FichaOrdem } from '../comum/tipos-cliente.ts';
+import type { EstadoPublico, Evento, Heroi, InimigoPublico, Mostrar, Revelacao, Turnos, FichaOrdem } from '../comum/tipos-cliente.ts';
 import type { EfeitoAtivo, ResultadoAcao } from '../../shared/acoes.ts';
 import { EfeitosAtivos } from './EfeitosAtivos.tsx';
 import { PalcoCena } from './PalcoCena.tsx';
@@ -164,6 +164,7 @@ export function App() {
         {estado?.aliados.map((h, i) => <CartaHeroi key={h.id} heroi={h} indice={i} atual={atual} efeitos={efeitos} />)}
       </footer>
       <Vitrine mostrar={estado?.cena.mostrar ?? null} />
+      <CartaRevelada revelacao={estado?.cena.revelacao ?? null} />
       <div className="fx" id="fx" />
       <Apresentacao registrar={registrar} segurar={segurar} soltar={soltar} terminou={terminou} />
       <div className="clarao-invocacao" id="clarao" />
@@ -402,4 +403,30 @@ function AvisoSom() {
   if (somMudo()) return <div className="aviso-som mudo">Som desligado · tecla M</div>;
   if (somBloqueado()) return <div className="aviso-som">Clique no telão para ligar o som</div>;
   return null;
+}
+
+// ---------------- mensagem secreta revelada ----------------
+
+/** Carta que o mestre tinha mandado em segredo, agora aberta para todos. */
+function CartaRevelada({ revelacao }: { revelacao: Revelacao | null }) {
+  // Guarda a ultima para animar a saida.
+  const [ultima, setUltima] = useState<Revelacao | null>(revelacao);
+  useEffect(() => {
+    if (revelacao) {
+      setUltima(revelacao);
+      somDissipar();
+    }
+  }, [revelacao?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const r = revelacao ?? ultima;
+  if (!r) return null;
+  return (
+    <div className={`revelacao ${revelacao ? 'aberta' : ''}`} aria-hidden={!revelacao}>
+      <div className="revelacao-carta" key={r.id}>
+        <span className="revelacao-selo" aria-hidden="true" />
+        <small>Revelado{r.para.length ? ` · era um segredo de ${r.para.join(' e ')}` : ''}</small>
+        {r.imagem ? <img src={r.imagem} alt="" /> : null}
+        {r.texto ? <p>{r.texto}</p> : null}
+      </div>
+    </div>
+  );
 }

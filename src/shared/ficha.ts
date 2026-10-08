@@ -1,5 +1,6 @@
 // Ficha de personagem jogador: o que a mesa guarda de cada heroi (importado do Nimb ou feito a mao).
 import type { Ataque, Atributo, TipoDano } from './tipos.ts';
+import type { Anim, AlvoMagia, Resistencia, Sucesso } from './magias-efeitos.ts';
 
 /** As 30 linhas de pericia da ficha (mesma ordem do PDF do Nimb). */
 export const PERICIAS = [
@@ -17,9 +18,55 @@ export interface Pericia {
   rotulo?: string;
 }
 
+/** Bonus que um poder ativo (ou magia) da enquanto dura. */
+export interface BonusAtivo {
+  ataque?: number;
+  dano?: number;
+  defesa?: number;
+}
+
 export interface Poder {
   nome: string;
   texto: string;
+  /** Custo em PM para usar pelo celular (0 ou vazio = passivo). */
+  pm?: number;
+  /** O que acontece na mesa ao usar (mesmo formato das magias proprias). */
+  efeito?: MagiaPropria['efeito'];
+  /** Enquanto ativo (ex.: Furia: +2 em ataque e dano). */
+  bonus?: BonusAtivo;
+}
+
+/** Poder que aparece para usar no celular (tem custo, efeito ou bonus). */
+export const poderUsavel = (p: Poder) => Boolean(p.pm || p.efeito || (p.bonus && (p.bonus.ataque || p.bonus.dano || p.bonus.defesa)));
+
+/** Magia criada pelo grupo (homebrew): descricao para ler e o efeito que o motor de regras aplica. */
+export interface MagiaPropria {
+  /** Sempre comeca com "propria-". */
+  id: string;
+  nome: string;
+  circulo: number;
+  execucao: string;
+  alcance: string;
+  duracao: string;
+  descricao: string;
+  efeito: {
+    alvo: AlvoMagia;
+    /** 0 = sem limite. */
+    maxAlvos: number;
+    dano?: string;
+    tipoDano?: TipoDano;
+    cura?: string;
+    res?: Resistencia;
+    sucesso?: Sucesso;
+    /** Condicao se o alvo falhar (ou sempre, sem teste). */
+    falhou?: string[];
+    persistente?: 'sustentada' | 'cena' | 'rodadas';
+    anim: Anim;
+  };
+  /** Aprimoramentos: +PM para somar dano e/ou alvos (pode usar varias vezes, ate o limite de PM). */
+  aprimoramentos?: { pm: number; texto: string; dano?: string; alvos?: number }[];
+  /** Efeito que o conjurador repete enquanto a magia dura, sem gastar PM (o chicote, o enxame...). */
+  uso?: MagiaPropria['efeito'] & { nome: string };
 }
 
 export interface Ficha {
@@ -47,14 +94,18 @@ export interface Ficha {
   ataques: Ataque[];
   /** Ids do grimorio (src/shared/dados/magias.json). */
   magias: string[];
-  /** Magias da ficha que o grimorio nao conhece (homebrew etc.). */
+  /** Magias da ficha que o grimorio nao conhece (so o nome, vindas do Nimb). */
   magiasExtras: string[];
+  /** Magias criadas pelo grupo, que funcionam na mesa como as do livro. */
+  magiasProprias: MagiaPropria[];
   /** Atributo-chave das magias; null para quem nao conjura. */
   atributoChave: Atributo | null;
   /** Soma na CD de todas as magias (ex.: Fortalecimento Arcano). */
   bonusCd: number;
   rd: Partial<Record<TipoDano | 'geral', number>>;
   poderes: Poder[];
+  /** Itens magicos e equipamentos especiais (o nome e o que fazem). */
+  itens: Poder[];
   proficiencias: string;
   equipamento: string;
   notas: string;

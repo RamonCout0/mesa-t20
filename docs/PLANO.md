@@ -17,8 +17,12 @@ Decisões tomadas com o grupo:
 
 ## Fases
 
-Situação: fases 0 a 4 prontas. Da fase 5 já existem o sangramento automático, as condições com duração,
-o aviso de vez com vibração e o bestiário lido dos PDFs (botão *Importar do livro* ou `npm run bestiario`).
+Situação: fases 0 a 5 prontas. Depois do primeiro teste com o grupo: o modo cena ficou sem caixa de
+diálogo (a fala é na voz dos jogadores) e ganhou posição livre com profundidade; entraram as mensagens
+secretas (com revelação no telão), o editor de ficha completo (magias próprias com aprimoramentos e uso
+repetido, poderes e itens usáveis com bônus ativos), o Chefe Final, a iniciativa única dos inimigos, a regra
+da casa "ninguém morre direto", encontros e cenas prontos e o backup. O dado gira no celular e cai do alto
+no telão. Fora do escopo por decisão do grupo: instalar como app no celular (nem todos conseguiriam no iPhone).
 
 ### Fase 0 — Base
 - Projeto Vite com quatro páginas: `/` (início), `/mestre`, `/telao`, `/jogador`.

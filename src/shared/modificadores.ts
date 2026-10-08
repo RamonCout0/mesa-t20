@@ -69,3 +69,13 @@ export function modResistencia(condicoes: string[], teste: 'fort' | 'ref' | 'von
 
 /** PV em que o personagem morre: -10 ou metade dos PV totais, o que for mais baixo (Tormenta20, p. 237). */
 export const limiteDeMorte = (pvMax: number) => -Math.max(10, Math.floor(pvMax / 2));
+
+/**
+ * PV depois de um dano. Heroi morre no limite negativo; com a regra da casa `zerarAntes`,
+ * o golpe que derruba para no 0 (ninguem morre direto) e so os seguintes descem dali.
+ */
+export function pvDepoisDoDano(pv: number, dano: number, pvMax: number, heroi: boolean, zerarAntes: boolean) {
+  let novo = pv - dano;
+  if (heroi && zerarAntes && pv > 0 && novo < 0) novo = 0;
+  return Math.max(limiteDeMorte(pvMax), novo);
+}

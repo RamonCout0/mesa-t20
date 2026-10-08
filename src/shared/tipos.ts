@@ -86,6 +86,8 @@ export interface Inimigo extends Combatente {
   ataques: Ataque[];
   /** Ficha de ameaça do bestiário de onde a carta saiu. */
   ameacaId: string | null;
+  /** Virou chefe final (Ameaças de Arton, p. 370): PV dobrado, RD pelo patamar, Maior que a Morte. */
+  chefeFinal?: boolean;
 }
 
 export type Entidade = Heroi | Inimigo;
@@ -122,28 +124,27 @@ export interface Ator {
   cor: string;
   /** Posicao horizontal no palco: 0 (esquerda) a 100 (direita). */
   x: number;
+  /** Onde ficam os pes: 0 (fundo, longe e menor) a 100 (frente, perto e maior). */
+  y: number;
   espelhar: boolean;
-}
-
-export interface Fala {
-  id: string;
-  /** null = narrador. */
-  atorId: string | null;
-  nome: string;
-  cor: string;
-  texto: string;
-  /** Veio do celular do jogador. */
-  jogador?: boolean;
-  em: number;
+  /** Expressao: outra imagem so para a cena (vazio = a imagem normal). */
+  expressao: string;
 }
 
 export interface Palco {
   fundo: string;
   atores: Ator[];
-  /** Fala na caixa de dialogo agora. */
-  fala: Fala | null;
-  /** Ultimas falas, para quem quiser reler. */
-  falas: Fala[];
+  /** Quem esta falando agora (fica em destaque, os outros escurecem). */
+  destaque: string | null;
+}
+
+/** Mensagem secreta revelada a todos no telao. */
+export interface Revelacao {
+  id: string;
+  texto: string;
+  imagem: string;
+  /** Para quem a mensagem tinha sido enviada (nomes dos herois). */
+  para: string[];
 }
 
 export interface Cena {
@@ -152,6 +153,7 @@ export interface Cena {
   idInvocacao: string;
   mostrar: Mostrar | null;
   palco: Palco;
+  revelacao: Revelacao | null;
 }
 
 export interface Turnos {
@@ -165,8 +167,12 @@ export interface Opcoes {
   importarPeloCelular: boolean;
   /** Jogador só age na própria vez quando há combate em andamento. */
   acaoSoNaVez: boolean;
-  /** No modo cena, jogadores falam pelo celular. */
-  falasPeloCelular: boolean;
+  /** Jogador edita a própria ficha toda pelo celular (atributos, ataques, magias...). */
+  fichaLivre: boolean;
+  /** Regra da casa: o golpe que derruba o herói para no 0; só os danos seguintes descem para a morte. */
+  zerarAntes: boolean;
+  /** Regra do livro: um teste de Iniciativa só para todos os inimigos, com o menor bônus entre eles. */
+  iniciativaUnica: boolean;
 }
 
 export interface Estado {
@@ -271,4 +277,19 @@ export interface ImagemGaleria {
   nome: string;
   pasta: 'personagens' | 'bosses' | 'galeria' | 'cenarios';
   data: number;
+}
+
+/** Mensagem (texto e/ou imagem) que o mestre manda em segredo para um ou mais jogadores. */
+export interface Segredo {
+  id: string;
+  /** Fichas (jogadores) que recebem. */
+  para: string[];
+  texto: string;
+  /** Imagem: da galeria (/galeria/...) ou enviada so para este segredo (fica em data/segredos/). */
+  imagem: string;
+  criadoEm: number;
+  /** Quem ja abriu (ficha -> quando). */
+  lidas: Record<string, number>;
+  respostas: { fichaId: string; nome: string; texto: string; em: number }[];
+  revelado: boolean;
 }

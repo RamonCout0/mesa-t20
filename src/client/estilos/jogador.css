@@ -492,46 +492,6 @@ li.cura .tag-desfecho { background: rgba(79, 209, 139, 0.2); color: #9df0c3; }
 .ativa-usos { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .modelos-dado.rolagem { grid-template-columns: repeat(7, 1fr); }
 
-/* ---------- aba cena (roleplay) ---------- */
-.j-cena { display: grid; gap: 12px; padding-top: 14px; }
-.cena-vista {
-  position: relative;
-  aspect-ratio: 16 / 10;
-  border-radius: 18px;
-  overflow: hidden;
-  background: radial-gradient(120% 90% at 50% 30%, #2a1d3a 0%, #120c1a 55%, #07050b 100%) center / cover no-repeat;
-  box-shadow: inset 0 0 0 1px var(--borda), 0 10px 26px rgba(0, 0, 0, 0.45);
-}
-.cena-vista::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.75)); pointer-events: none; }
-.cena-atores { position: absolute; inset: 0; }
-.cena-ator { position: absolute; top: 18%; translate: -50% 0; transition: left 600ms var(--ease-suave), filter 300ms; }
-.cena-ator .retrato { width: 52px; height: 68px; border-radius: 9px; box-shadow: 0 0 0 2px var(--cor), 0 6px 14px rgba(0, 0, 0, 0.6); }
-.cena-vista:has(.cena-ator.falando) .cena-ator:not(.falando) { filter: brightness(0.5); }
-.cena-ator.falando .retrato { box-shadow: 0 0 0 2px #fff, 0 0 0 4px var(--cor), 0 0 18px var(--cor); }
-.cena-fala {
-  position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 2;
-  padding: 8px 12px; border-radius: 12px;
-  background: rgba(12, 8, 18, 0.88); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.4);
-}
-.cena-fala b { display: block; color: var(--cor); font-size: 12px; text-transform: uppercase; letter-spacing: 0.08em; }
-.cena-fala p { margin: 2px 0 0; font: 15px/1.4 var(--fonte-titulo); max-height: 4.2em; overflow: hidden; }
-.cena-fala.narracao p { font-style: italic; text-align: center; }
-.cena-log { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; max-height: 38dvh; overflow-y: auto; }
-.cena-log li { max-width: 86%; padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--superficie-2); box-shadow: inset 3px 0 0 var(--cor); font-size: 14px; line-height: 1.4; }
-.cena-log li b { display: block; color: var(--cor); font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
-.cena-log li.minha { justify-self: end; border-radius: 14px 14px 4px 14px; background: color-mix(in srgb, var(--cor) 22%, var(--superficie-2)); box-shadow: inset -3px 0 0 var(--cor); }
-.cena-log li.narracao { justify-self: center; max-width: 94%; background: transparent; box-shadow: none; font-style: italic; color: var(--suave); text-align: center; }
-.cena-falar {
-  position: sticky; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 5;
-  display: grid; grid-template-columns: minmax(0, 1fr) 52px; gap: 8px; padding: 8px; border-radius: 16px;
-  background: rgba(16, 11, 24, 0.96); box-shadow: inset 0 0 0 1px var(--linha-forte), 0 10px 26px rgba(0, 0, 0, 0.5);
-}
-.cena-falar textarea {
-  resize: none; min-height: 44px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--linha-forte);
-  background: rgba(8, 5, 12, 0.6); color: var(--texto); font: 16px/1.35 var(--fonte-titulo);
-}
-.cena-falar .j-btn { min-height: 0; height: 100%; padding: 0; }
-
 /* ---------- teste pedido pelo mestre ---------- */
 .pedido-teste {
   display: grid;
@@ -551,3 +511,74 @@ li.cura .tag-desfecho { background: rgba(79, 209, 139, 0.2); color: #9df0c3; }
 .pedido-teste b { font: 600 18px var(--fonte-titulo); color: #fff3d6; }
 .pedido-teste b i { font-style: normal; font-size: 14px; color: var(--ouro); }
 .pedido-teste .j-btn { min-height: 44px; padding: 0 14px; white-space: nowrap; }
+
+/* ---------- mensagens secretas ---------- */
+.j-topo-dir { display: flex; align-items: center; gap: 10px; }
+.j-envelope {
+  position: relative; display: grid; place-items: center; width: 40px; height: 40px; padding: 0;
+  border-radius: 12px; border: 1px solid var(--linha-forte); background: rgba(255, 255, 255, 0.04); color: var(--suave);
+}
+.j-envelope .ico { width: 21px; height: 21px; }
+.j-envelope.nova { color: var(--ouro); border-color: rgba(232, 195, 122, 0.6); animation: pulsoVez 1.6s ease-in-out infinite; }
+.j-envelope i {
+  position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--perigo); color: #fff; font: 700 11px/18px var(--fonte-num); font-style: normal;
+}
+.j-folha-fundo {
+  position: fixed; inset: 0; z-index: 80; display: grid; align-items: end;
+  background: rgba(4, 2, 8, 0.6); backdrop-filter: blur(4px); animation: abrirFundo 200ms ease;
+}
+.j-folha-fundo.escuro { align-items: center; padding: 18px; background: rgba(4, 2, 8, 0.82); }
+@keyframes abrirFundo { from { opacity: 0; } }
+.j-caixa-segredos {
+  max-height: 75dvh; overflow-y: auto; padding: 14px 14px calc(18px + env(safe-area-inset-bottom));
+  border-radius: 22px 22px 0 0; background: linear-gradient(180deg, #1e1629, #120d18); box-shadow: 0 -1px 0 var(--borda);
+}
+.j-caixa-segredos header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: var(--ouro); }
+.j-caixa-segredos header b { flex: 1; font: 700 18px var(--fonte-titulo); color: var(--ouro-claro); }
+.j-caixa-segredos .fechar { width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.05); color: var(--suave); }
+.j-caixa-segredos ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.j-caixa-segredos li button {
+  width: 100%; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 12px;
+  border-radius: 14px; border: 1px solid var(--linha); background: var(--superficie); color: var(--texto); text-align: left;
+}
+.j-caixa-segredos li.nova button { border-color: rgba(232, 195, 122, 0.55); background: rgba(232, 195, 122, 0.08); }
+.j-caixa-segredos .resumo { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.j-caixa-segredos time { color: var(--apagado); font: 12px var(--fonte-num); }
+.j-caixa-segredos em { grid-column: 2; font-size: 11px; color: var(--ouro); font-style: normal; }
+.selo-mini { color: var(--ouro); }
+
+.carta-secreta {
+  position: relative; display: grid; gap: 12px; width: min(100%, 460px); margin: 0 auto; padding: 22px 18px 18px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f3e6c8, #e2cfa2 70%, #cdb57f);
+  color: #2b1d10;
+  box-shadow: 0 0 0 1px rgba(90, 60, 20, 0.5), inset 0 0 40px rgba(120, 80, 30, 0.35), 0 30px 70px rgba(0, 0, 0, 0.7);
+  animation: cartaEntra 450ms var(--ease-mola);
+}
+@keyframes cartaEntra { from { opacity: 0; transform: translateY(30px) scale(0.92) rotate(-2deg); } }
+.carta-secreta.lacrada { padding: 34px 18px; }
+.lacre { display: grid; justify-items: center; gap: 10px; border: 0; background: none; color: inherit; text-align: center; }
+.selo-cera {
+  display: grid; place-items: center; width: 84px; height: 84px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e0504c, #9a1c1c 60%, #6a0e10);
+  box-shadow: 0 6px 14px rgba(60, 10, 10, 0.5), inset 0 -4px 8px rgba(0, 0, 0, 0.35), inset 0 3px 6px rgba(255, 180, 160, 0.4);
+  color: #ffd9c9; animation: seloPulsa 1.8s ease-in-out infinite;
+}
+.selo-cera .ico { width: 34px; height: 34px; }
+@keyframes seloPulsa { 50% { transform: scale(1.06); } }
+.lacre b { font: 700 22px var(--fonte-titulo); }
+.lacre small { font-size: 13px; color: #5a4128; }
+.carta-secreta .de { font-size: 12px; color: #6a4e2e; letter-spacing: 0.04em; }
+.carta-secreta p { margin: 0; font: 18px/1.5 var(--fonte-titulo); white-space: pre-wrap; }
+.carta-secreta img { width: 100%; max-height: 46dvh; object-fit: contain; border-radius: 10px; background: rgba(0, 0, 0, 0.08); box-shadow: 0 0 0 1px rgba(90, 60, 20, 0.35); }
+.carta-secreta img.zoom { position: fixed; inset: 0; z-index: 90; max-height: none; height: 100dvh; border-radius: 0; background: #000; }
+.minhas-respostas { margin: 0; padding: 0 0 0 4px; list-style: none; font-size: 14px; color: #4a3520; }
+.carta-secreta .responder { display: grid; grid-template-columns: minmax(0, 1fr) 48px; gap: 8px; }
+.carta-secreta textarea {
+  resize: none; padding: 10px; border-radius: 10px; border: 1px solid rgba(90, 60, 20, 0.4);
+  background: rgba(255, 250, 235, 0.7); color: #2b1d10; font: 15px/1.35 var(--fonte);
+}
+.carta-secreta .responder .j-btn { min-height: 0; height: 100%; padding: 0; }
+.carta-secreta > .j-btn { background: rgba(43, 29, 16, 0.85); color: #f3e6c8; border-color: transparent; }
+.editar-ficha { margin-top: 16px; }

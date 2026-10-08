@@ -1,12 +1,15 @@
 // Aba "Acoes": ataques com arma. Escolhe a arma, o alvo e os extras; o servidor rola e resolve.
 import { useState } from 'react';
 import type { Ataque } from '../../shared/tipos.ts';
+import { poderUsavel, type Poder } from '../../shared/ficha.ts';
+import { CONDICAO_POR_ID } from '../../shared/condicoes.ts';
 import { NOME_DANO } from '../../shared/tipos.ts';
 import { expressaoValida } from '../../shared/rolagem.ts';
 import { Icone } from '../comum/Icone.tsx';
 import type { PropsAba } from './Jogo.tsx';
 import { Folha } from './Folha.tsx';
-import { SeletorAlvos } from './Alvos.tsx';
+import { SeletorAlvos, type QuemPode } from './Alvos.tsx';
+import { dadosDaExpressao } from './Grimorio.tsx';
 
 export const ICONE_ARMA: Record<string, string> = {
   corte: '⚔️', perfuracao: '🗡️', impacto: '🔨', flecha: '🏹', virote: '🎯', tiro: '🔫', arremesso: '🪃', natural: '👊',
@@ -20,6 +23,9 @@ export const descreverAtaque = (a: Ataque) =>
 export function Acoes(props: PropsAba) {
   const { ficha } = props;
   const [arma, setArma] = useState<Ataque | null>(null);
+  const [usando, setUsando] = useState<{ lista: 'poderes' | 'itens'; indice: number } | null>(null);
+  const usaveis = (lista: 'poderes' | 'itens') => (ficha[lista] ?? []).map((p, indice) => ({ p, indice, lista })).filter(({ p }) => poderUsavel(p));
+  const poderes = [...usaveis('poderes'), ...usaveis('itens')];
   return (
     <main>
       {props.bloqueio ? <p className="aviso-bloqueio">{props.bloqueio}</p> : null}
@@ -35,9 +41,24 @@ export function Acoes(props: PropsAba) {
           ))}
         </div>
       ) : (
-        <div className="j-vazio"><b>Nenhuma arma na ficha</b>Equipe uma arma no Nimb e atualize a ficha na aba Mais.</div>
+        <div className="j-vazio"><b>Nenhuma arma na ficha</b>Adicione em Mais → Editar ficha → Ataques (ou atualize o PDF do Nimb).</div>
       )}
+      {poderes.length ? (
+        <>
+          <div className="j-secao"><h3>Poderes e itens</h3><span className="conta">{poderes.length}</span><span className="deco" /></div>
+          <div className="j-lista">
+            {poderes.map(({ p, indice, lista }) => (
+              <button key={`${lista}${indice}`} type="button" className={`j-item ${(p.pm ?? 0) > (props.heroi?.pm ?? 0) ? 'sem-pm' : ''}`} onClick={() => setUsando({ lista, indice })}>
+                <span className="icone-item">{lista === 'itens' ? '🎒' : '⚡'}</span>
+                <span style={{ minWidth: 0 }}><b>{p.nome}</b><small>{resumoPoder(p)}</small></span>
+                <span className="custo">{p.pm ? `${p.pm} PM` : 'usar'}</span>
+              </button>
+            ))}
+          </div>
+        </>
+      ) : null}
       {arma ? <FolhaAtaque {...props} arma={arma} fechar={() => setArma(null)} /> : null}
+      {usando ? <FolhaPoder {...props} {...usando} fechar={() => setUsando(null)} /> : null}
     </main>
   );
 }
@@ -91,6 +112,59 @@ function FolhaAtaque({ arma, fechar, estado, heroi, agir, bloqueio }: PropsAba &
         {bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
         <button type="button" className="j-btn ouro largo rolar-grande" disabled={!alvos.length || enviando || !extraValido || Boolean(bloqueio && !heroi)} onClick={atacar}>
           <Icone nome="espada" />{enviando ? 'Atacando…' : alvos.length ? 'Atacar!' : 'Escolha o alvo'}
+        </button>
+      </div>
+    </Folha>
+  );
+}
+
+/** Uma linha sobre o que o poder faz: bonus, dano, cura, condicao. */
+function resumoPoder(p: Poder) {
+  const b = p.bonus;
+  const e = p.efeito;
+  return [
+    b?.ataque ? `${b.ataque > 0 ? '+' : ''}${b.ataque} ataque` : '', b?.dano ? `${b.dano > 0 ? '+' : ''}${b.dano} dano` : '',
+    b?.defesa ? `${b.defesa > 0 ? '+' : ''}${b.defesa} Defesa` : '',
+    e?.dano ? `${e.dano}${e.tipoDano ? ` ${NOME_DANO[e.tipoDano]}` : ''}` : '', e?.cura ? `cura ${e.cura}` : '',
+    e?.falhou?.length ? CONDICAO_POR_ID[e.falhou[0].split(':')[0]]?.nome.toLowerCase() ?? '' : '',
+  ].filter(Boolean).join(' · ') || p.texto.slice(0, 60);
+}
+
+const QUEM_DO_ALVO: Record<string, QuemPode> = { inimigo: 'inimigos', inimigos: 'inimigos', aliado: 'aliados', aliados: 'aliados', qualquer: 'todos' };
+
+function FolhaPoder({ lista, indice, fechar, ficha, estado, heroi, agir, bloqueio }: PropsAba & { lista: 'poderes' | 'itens'; indice: number; fechar: () => void }) {
+  const p = ficha[lista][indice];
+  const [alvos, setAlvos] = useState<string[]>([]);
+  const [enviando, setEnviando] = useState(false);
+  if (!p) return null;
+  const e = p.efeito;
+  const precisaAlvo = Boolean(e && !['si', 'nenhum'].includes(e.alvo));
+  const max = e?.maxAlvos ?? 1;
+  const semPm = (p.pm ?? 0) > (heroi?.pm ?? 0);
+
+  const usar = async () => {
+    setEnviando(true);
+    const ok = await agir({ tipo: 'poder', lista, indice, alvos }, { dados: dadosDaExpressao(e?.dano, e?.cura), titulo: p.nome });
+    setEnviando(false);
+    if (ok) fechar();
+  };
+
+  return (
+    <Folha fechar={fechar}>
+      <h2>{lista === 'itens' ? '🎒' : '⚡'} {p.nome}</h2>
+      <div className="meta">
+        {p.pm ? <span className="destaque">{p.pm} PM</span> : null}
+        {resumoPoder(p) !== p.texto.slice(0, 60) ? <span>{resumoPoder(p)}</span> : null}
+        {e?.persistente || p.bonus ? <span>Fica ativo {e?.persistente === 'sustentada' ? '(sustentado)' : 'na cena'}</span> : null}
+      </div>
+      {p.texto ? <p className="j-texto">{p.texto}</p> : null}
+      {precisaAlvo ? (
+        <SeletorAlvos estado={estado} quem={QUEM_DO_ALVO[e!.alvo] ?? 'todos'} max={max} escolhidos={alvos} mudar={setAlvos} eu={heroi?.id} />
+      ) : null}
+      <div className="acoes-folha">
+        {semPm ? <p className="aviso-bloqueio">PM insuficientes.</p> : bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
+        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || semPm || (precisaAlvo && !alvos.length) || Boolean(bloqueio && !heroi)} onClick={usar}>
+          <Icone nome="raio" />{enviando ? 'Usando…' : precisaAlvo && !alvos.length ? 'Escolha o alvo' : 'Usar'}
         </button>
       </div>
     </Folha>

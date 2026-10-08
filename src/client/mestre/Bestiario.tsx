@@ -5,7 +5,7 @@ import type { Ameaca, Estado } from '../comum/tipos-cliente.ts';
 import { NOME_DANO } from '../../shared/tipos.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { Icone } from '../comum/Icone.tsx';
-import { pedirBestiario, pin, usePainel } from './contexto.ts';
+import { pedirBestiario, pedirSalvos, pin, usePainel, type Encontro } from './contexto.ts';
 import { Botao } from './Botao.tsx';
 import { NOME_TIER } from './Editor.tsx';
 
@@ -16,15 +16,17 @@ interface Props {
   visivel: boolean;
   estado: Estado;
   bestiario: Ameaca[];
+  encontros: Encontro[];
   editar: (a: Ameaca | null) => void;
   irParaCombate: () => void;
 }
 
-export function Bestiario({ visivel, estado, bestiario, editar, irParaCombate }: Props) {
-  const { avisar } = usePainel();
+export function Bestiario({ visivel, estado, bestiario, encontros, editar, irParaCombate }: Props) {
+  const { avisar, enviar: enviarMesa } = usePainel();
   const [busca, setBusca] = useState('');
   const [qtd, setQtd] = useState<Record<string, number>>({});
   const [naTela, setNaTela] = useState(true);
+  const [chefe, setChefe] = useState<Record<string, boolean>>({});
   const [lendo, setLendo] = useState(false);
   const livro = useRef<HTMLInputElement>(null);
 
@@ -50,8 +52,9 @@ export function Bestiario({ visivel, estado, bestiario, editar, irParaCombate }:
 
   const porNaMesa = async (a: Ameaca) => {
     const quantidade = qtd[a.id] ?? 1;
-    if (await pedirBestiario(avisar, { acao: 'naMesa', id: a.id, quantidade, naTela })) {
-      avisar(`${quantidade > 1 ? `${quantidade}× ` : ''}${a.nome} na mesa${naTela ? ' e no telão' : ' (escondido)'}.`, 'info');
+    const chefeFinal = Boolean(chefe[a.id]);
+    if (await pedirBestiario(avisar, { acao: 'naMesa', id: a.id, quantidade, naTela, chefeFinal })) {
+      avisar(`${quantidade > 1 ? `${quantidade}× ` : ''}${a.nome}${chefeFinal ? ' (chefe final)' : ''} na mesa${naTela ? ' e no telão' : ' (escondido)'}.`, 'info');
     }
   };
 
@@ -70,6 +73,55 @@ export function Bestiario({ visivel, estado, bestiario, editar, irParaCombate }:
         <input ref={livro} type="file" accept="application/pdf,.pdf,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importarLivro(f); e.target.value = ''; }} />
         <Botao classe="ouro" icone="mais" texto="Nova ameaça" onClick={() => editar(null)} />
       </header>
+
+      <section className="encontros">
+        <header>
+          <h3>Encontros prontos</h3>
+          <span className="dica-cena">Monte o grupo de inimigos na mesa e salve; na sessão, é só carregar.</span>
+          <span className="deco" />
+          <Botao
+            classe="pequeno"
+            icone="mais"
+            texto="Salvar inimigos da mesa"
+            disabled={!estado.inimigos.length}
+            onClick={async () => {
+              const nome = prompt('Nome do encontro (ex.: Emboscada na estrada):');
+              if (nome && await pedirSalvos(avisar, { tipo: 'encontro', acao: 'salvar', nome })) avisar(`Encontro “${nome}” salvo.`, 'info');
+            }}
+          />
+          <Botao
+            classe="pequeno fantasma"
+            icone="lixo"
+            texto="Tirar inimigos da mesa"
+            disabled={!estado.inimigos.length}
+            onClick={async () => {
+              if (!confirm('Tirar todos os inimigos da mesa? (dá para desfazer)')) return;
+              await enviarMesa({ tipo: 'limparInimigos' });
+            }}
+          />
+        </header>
+        {encontros.length ? (
+          <div className="lista-encontros">
+            {encontros.map((e) => (
+              <article key={e.id} className="encontro">
+                <b>{e.nome}</b>
+                <small>{e.itens.map((it) => `${it.quantidade}× ${bestiario.find((a) => a.id === it.ameacaId)?.nome ?? '(apagada)'}${it.chefeFinal ? ' 👑' : ''}`).join(' · ')}</small>
+                <div className="linha-botoes">
+                  <Botao classe="pequeno ouro" icone="cartas" texto="Pôr na mesa" title="Acrescenta aos inimigos que já estão na mesa" onClick={async () => {
+                    const r = await pedirSalvos(avisar, { tipo: 'encontro', acao: 'carregar', id: e.id, naTela });
+                    if (r) avisar(`${e.nome} na mesa${r.faltando ? ` (${r.faltando} ficha(s) apagada(s) do bestiário ficaram de fora)` : ''}.`, 'info');
+                  }} />
+                  <Botao classe="pequeno" icone="reiniciar" texto="Trocar a mesa" title="Tira os inimigos atuais e põe este encontro" onClick={async () => {
+                    if (confirm(`Tirar os inimigos atuais e pôr “${e.nome}”? (dá para desfazer)`)) await pedirSalvos(avisar, { tipo: 'encontro', acao: 'carregar', id: e.id, naTela, substituir: true });
+                  }} />
+                  <span className="deco" />
+                  <Botao classe="icone pequeno fantasma" icone="lixo" title="Apagar encontro" onClick={async () => { if (confirm(`Apagar o encontro “${e.nome}”?`)) await pedirSalvos(avisar, { tipo: 'encontro', acao: 'remover', id: e.id }); }} />
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
 
       {lista.length ? (
         <div className="grade-ameacas">
@@ -115,6 +167,9 @@ export function Bestiario({ visivel, estado, bestiario, editar, irParaCombate }:
                     <b>{n}</b>
                     <button type="button" onClick={() => setQtd({ ...qtd, [a.id]: Math.min(20, n + 1) })} aria-label="Mais">+</button>
                   </div>
+                  <button type="button" className={`chip-chefe ${chefe[a.id] ? 'on' : ''}`} title="Chefe final (Ameaças de Arton, p. 370): PV dobrado, +2 PM por ND, Maior que a Morte, RD pelo patamar e ND +2" onClick={() => setChefe({ ...chefe, [a.id]: !chefe[a.id] })}>
+                    <Icone nome="coroa" />Chefe
+                  </button>
                   <Botao classe="ouro pequeno" icone="cartas" texto="Pôr na mesa" onClick={() => porNaMesa(a)} />
                   <span className="deco" />
                   <Botao classe="icone pequeno fantasma" icone="editar" title="Editar ficha" onClick={() => editar(a)} />

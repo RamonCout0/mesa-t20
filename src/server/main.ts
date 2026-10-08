@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  carregar, salvar, executar, estadoDemo, visaoPublica, filtrarEvento, ganchosDeTurno, ACAO_SEM_HISTORICO, tirarEfeitos, novoAtor, falar, type Acao,
+  carregar, salvar, executar, estadoDemo, migrar, visaoPublica, filtrarEvento, ganchosDeTurno, ACAO_SEM_HISTORICO, tirarEfeitos, type Acao,
 } from './estado.ts';
 import { responder, lerBinario, lerJson, type Req, type Res } from './http.ts';
 import {
@@ -23,11 +23,13 @@ import type { Ficha } from '../shared/ficha.ts';
 import QRCode from 'qrcode';
 import { Fichas, colocarNaMesa, heroiDaFicha, sincronizarHeroi } from './fichas.ts';
 import { Bestiario, porNaMesa } from './bestiario.ts';
+import { Segredos, urlImagemSegredo } from './segredos.ts';
+import { Salvos, agruparInimigos, restaurarSalvos } from './salvos.ts';
 import { ameacasDoLivro, dadosDaAmeaca, linhasDoPdf } from './bestiario-livro.ts';
 import { importarPdfNimb } from './importar-nimb.ts';
 import {
   iniciarTurno, encerrarCena, resolverAtaque, resolverMagia, resolverUso, resolverRolagem,
-  resolverHabilidade, resolverSangramento, resolverTeste, resultadoPublico, type Contexto,
+  resolverHabilidade, resolverPoder, resolverSangramento, resolverTeste, resultadoPublico, type Contexto,
 } from './regras.ts';
 import type { ResultadoAcao } from '../shared/acoes.ts';
 import type { Heroi, Ataque } from '../shared/tipos.ts';
@@ -59,6 +61,8 @@ function guardarFoto(foto: string, acaoId?: string) {
 criarPastas(RAIZ);
 const fichas = new Fichas(RAIZ);
 const bestiario = new Bestiario(RAIZ);
+const segredos = new Segredos(RAIZ);
+const salvos = new Salvos(RAIZ);
 // Inicio de turno: conta as rodadas e, se o heroi estiver sangrando, rola o teste de Constituicao.
 // O resultado fica pendente e e publicado junto com o estado novo.
 const resultadosDoTurno: ResultadoAcao[] = [];
@@ -120,6 +124,14 @@ function transmitir(eventos: Evento[] = []) {
 }
 
 // Fichas mudaram: o mestre recebe a lista (com os codigos) e cada jogador a sua.
+/** Mensagens secretas mudaram: o mestre recebe todas, cada jogador so as dele. */
+function transmitirSegredos() {
+  for (const c of clientes) {
+    if (c.visao === 'mestre') enviar(c, 'segredos', segredos.lista());
+    else if (c.visao === 'jogador' && c.fichaId) enviar(c, 'segredos', segredos.daFicha(c.fichaId));
+  }
+}
+
 function transmitirFichas(id?: string) {
   for (const c of clientes) {
     if (c.visao === 'mestre') enviar(c, 'fichas', fichas.lista());
@@ -157,7 +169,14 @@ function abrirFluxo(req: Req, res: Res, url: URL) {
     bestiario.recarregar(); // pega fichas criadas pela ferramenta de linha de comando
     enviar(cliente, 'bestiario', bestiario.lista());
   }
-  if (ficha) enviar(cliente, 'ficha', { ficha, heroiId: heroiDaFicha(estado, ficha)?.id ?? null });
+  if (ficha) {
+    enviar(cliente, 'ficha', { ficha, heroiId: heroiDaFicha(estado, ficha)?.id ?? null });
+    enviar(cliente, 'segredos', segredos.daFicha(ficha.id));
+  }
+  if (visao === 'mestre') {
+    enviar(cliente, 'segredos', segredos.lista());
+    enviar(cliente, 'salvos', salvos.tudo());
+  }
   req.on('close', () => clientes.delete(cliente));
 }
 
@@ -188,7 +207,7 @@ function aplicarAcao(acao: Acao): Evento[] {
 }
 
 // Acoes do mestre que passam pelo motor de regras (o inimigo ataca, usa habilidade...).
-const ACOES_DE_REGRA = new Set(['atacarComo', 'magiaComo', 'usarComo', 'habilidade', 'rolarComo', 'responderTeste']);
+const ACOES_DE_REGRA = new Set(['atacarComo', 'magiaComo', 'usarComo', 'habilidade', 'rolarComo', 'responderTeste', 'poderComo']);
 
 async function tratarAcao(req: Req, res: Res, url: URL) {
   if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
@@ -244,6 +263,8 @@ function resolverPeloMotor(a: Acao, ehJogador: boolean, autorForcado?: string): 
     r = resolverUso(ctx, autorId, String(a.efeitoId ?? ''), Number(a.indice ?? 0), (a.alvos as string[]) ?? [], ehJogador);
   } else if (a.tipo === 'habilidade') {
     r = resolverHabilidade(ctx, autorId, (a.habilidade ?? {}) as never, (a.alvos as string[]) ?? []);
+  } else if (a.tipo === 'poder' || a.tipo === 'poderComo') {
+    r = resolverPoder(ctx, autorId, Number(a.indice ?? -1), (a.alvos as string[]) ?? [], ehJogador, a.lista === 'itens' ? 'itens' : 'poderes');
   } else if (a.tipo === 'responderTeste') {
     r = resolverTeste(ctx, autorId, String(a.pedidoId ?? ''));
   } else if (a.tipo === 'rolar' || a.tipo === 'rolarComo') {
@@ -291,28 +312,13 @@ async function tratarAcaoJogador(req: Req, res: Res, url: URL) {
       depoisDeMexerNaMesa();
       return responder(res, 200, { ok: true });
     }
-    if (a.tipo === 'falar') {
-      // Modo cena: o heroi do jogador fala na caixa de dialogo (entra no palco se ainda nao estiver).
-      if (!estado.opcoes.falasPeloCelular) throw new Error('O mestre desligou as falas pelo celular.');
-      if (estado.cena.modo !== 'roleplay') throw new Error('As falas aparecem no modo cena.');
-      const heroiId = heroiIdDaFicha(f.id);
-      if (!heroiId) throw new Error('Seu personagem não está na mesa. Peça ao mestre para colocá-lo.');
-      const palco = estado.cena.palco;
-      let ator = palco.atores.find((x) => x.refId === heroiId);
-      if (!ator) {
-        if (palco.atores.length >= 8) throw new Error('A cena está cheia. Peça ao mestre para abrir espaço.');
-        ator = novoAtor(estado, { refId: heroiId });
-        palco.atores.push(ator);
-      }
-      falar(estado, ator.id, a.texto, '', true);
-      depoisDeMexerNaMesa();
-      return responder(res, 200, { ok: true });
-    }
-    if (!['atacar', 'magia', 'usar', 'rolar', 'responderTeste'].includes(a.tipo)) throw new Error('Ação desconhecida.');
+    if (!['atacar', 'magia', 'usar', 'rolar', 'responderTeste', 'poder'].includes(a.tipo)) throw new Error('Ação desconhecida.');
     const heroiId = heroiIdDaFicha(f.id);
     if (!heroiId) throw new Error('Seu personagem não está na mesa. Peça ao mestre para colocá-lo.');
     const r = resolverPeloMotor(a, true, heroiId);
-    return responder(res, 200, { ok: true, resultado: r.secreta ? r : resultadoPublico(estado, r) });
+    // Sem telao aberto, o celular nao espera a animacao para mostrar o resultado.
+    const telaoAberto = [...clientes].some((c) => c.visao === 'publico');
+    return responder(res, 200, { ok: true, resultado: r.secreta ? r : resultadoPublico(estado, r), telaoAberto });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
   }
@@ -438,11 +444,26 @@ async function tratarFichaJogador(req: Req, res: Res, url: URL) {
   if (!f) return responder(res, 401, { ok: false, erro: 'Código inválido. Peça o QR code ao mestre.' });
   try {
     if (req.method === 'GET') return responder(res, 200, { ok: true, ficha: f, heroiId: heroiDaFicha(estado, f)?.id ?? null });
-    const nova = fichas.editar(f.id, await lerJson(req), false);
+    const nova = fichas.editar(f.id, await lerJson(req), estado.opcoes.fichaLivre);
     const h = heroiDaFicha(estado, nova);
     if (h) { sincronizarHeroi(h, nova); depoisDeMexerNaMesa(); }
-    transmitirFichas(nova.id);
+    transmitirFichas();
     return responder(res, 200, { ok: true });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+/** Personagem criado do zero no celular (sem PDF do Nimb). */
+async function tratarNovaFichaJogador(req: Req, res: Res) {
+  try {
+    if (!estado.opcoes.importarPeloCelular) throw new Error('O mestre desligou a criação pelo celular. Peça para ele criar sua ficha.');
+    const f = fichas.criarEmBranco(String((await lerJson(req)).nome ?? ''));
+    guardarHistorico();
+    colocarNaMesa(estado, f);
+    depoisDeMexerNaMesa();
+    transmitirFichas();
+    return responder(res, 200, { ok: true, codigo: f.codigo, id: f.id });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
   }
@@ -474,8 +495,11 @@ async function tratarFichaMestre(req: Req, res: Res, url: URL) {
   if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
   try {
     const a = await lerJson(req);
-    const id = String(a.id ?? '');
-    if (a.acao === 'editar') {
+    let id = String(a.id ?? '');
+    if (a.acao === 'nova') {
+      // Ficha em branco (sem PDF do Nimb), para o mestre preencher no editor.
+      id = fichas.criarEmBranco(String(a.nome ?? '')).id;
+    } else if (a.acao === 'editar') {
       const f = fichas.editar(id, (a.patch ?? {}) as Record<string, unknown>, true);
       const h = heroiDaFicha(estado, f);
       if (h) { sincronizarHeroi(h, f); depoisDeMexerNaMesa(); }
@@ -483,6 +507,9 @@ async function tratarFichaMestre(req: Req, res: Res, url: URL) {
       guardarHistorico();
       colocarNaMesa(estado, fichas.exigir(id));
       depoisDeMexerNaMesa();
+    } else if (a.acao === 'importarJson') {
+      // Ficha baixada em arquivo (de outra mesa ou backup): entra como ficha nova.
+      id = fichas.restaurar((a.ficha ?? {}) as Record<string, unknown>, false).id;
     } else if (a.acao === 'novoCodigo') {
       fichas.novoCodigoPara(id);
     } else if (a.acao === 'remover') {
@@ -503,7 +530,7 @@ async function tratarFichaMestre(req: Req, res: Res, url: URL) {
       throw new Error('Ação desconhecida.');
     }
     transmitirFichas();
-    return responder(res, 200, { ok: true });
+    return responder(res, 200, { ok: true, id });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
   }
@@ -532,7 +559,7 @@ async function tratarBestiario(req: Req, res: Res, url: URL) {
       resposta = { ameaca, atualizada: Boolean(existente) };
     } else if (a.acao === 'naMesa') {
       guardarHistorico();
-      const novos = porNaMesa(estado, bestiario.exigir(id), a.quantidade, a.naTela !== false);
+      const novos = porNaMesa(estado, bestiario.exigir(id), a.quantidade, a.naTela !== false, Boolean(a.chefeFinal));
       depoisDeMexerNaMesa();
       resposta.ids = novos.map((x) => x.id);
     } else {
@@ -560,6 +587,199 @@ async function tratarLivro(req: Req, res: Res, url: URL) {
     return responder(res, 200, { ok: true, lidas: fichasLidas.length, ...r, semNd: fichasLidas.filter((f) => !f.nd).length });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+// ---------------- backup ----------------
+
+/** Tudo o que o mestre preparou, num arquivo so: fichas, bestiario, encontros, cenas e a mesa. */
+function tratarBackup(req: Req, res: Res, url: URL) {
+  if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
+  if (req.method === 'GET') {
+    const dados = { app: 'mesa-t20', versao: 1, criadoEm: Date.now(), estado, fichas: fichas.lista(), bestiario: bestiario.lista(), ...salvos.tudo() };
+    res.writeHead(200, {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Content-Disposition': `attachment; filename="mesa-t20-backup-${new Date().toISOString().slice(0, 10)}.json"`,
+    });
+    return res.end(JSON.stringify(dados, null, 1));
+  }
+  return restaurarBackup(req, res, url);
+}
+
+async function restaurarBackup(req: Req, res: Res, url: URL) {
+  try {
+    const b = await lerJson<Record<string, unknown>>(req, 60 * 1024 * 1024);
+    if (b.app !== 'mesa-t20') throw new Error('Esse arquivo não é um backup da Mesa T20.');
+    const listaDe = (v: unknown) => (Array.isArray(v) ? v as Record<string, unknown>[] : []);
+    let nFichas = 0;
+    for (const f of listaDe(b.fichas)) { try { fichas.restaurar(f); nFichas += 1; } catch { /* ficha estragada: pula */ } }
+    let nAmeacas = 0;
+    for (const a of listaDe(b.bestiario)) { try { bestiario.restaurar(a); nAmeacas += 1; } catch { /* idem */ } }
+    const nSalvos = restaurarSalvos(salvos, b as { encontros?: unknown; cenas?: unknown });
+    let mesa = false;
+    if (url.searchParams.get('mesa') === '1' && b.estado) {
+      const e = migrar(b.estado);
+      if (!e) throw new Error('A mesa desse backup não pôde ser lida.');
+      guardarHistorico();
+      estado = e;
+      mesa = true;
+    }
+    for (const h of estado.aliados) { const f = h.fichaId ? fichas.porId(h.fichaId) : undefined; if (f) sincronizarHeroi(h, f); }
+    depoisDeMexerNaMesa();
+    transmitirFichas();
+    for (const c of clientes) if (c.visao === 'mestre') { enviar(c, 'bestiario', bestiario.lista()); enviar(c, 'salvos', salvos.tudo()); }
+    return responder(res, 200, { ok: true, fichas: nFichas, ameacas: nAmeacas, salvos: nSalvos, mesa });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+// ---------------- encontros e cenas salvos ----------------
+
+async function tratarSalvos(req: Req, res: Res, url: URL) {
+  if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
+  try {
+    const a = await lerJson(req);
+    const id = String(a.id ?? '');
+    let resposta: Record<string, unknown> = {};
+    if (a.tipo === 'encontro') {
+      if (a.acao === 'salvar') {
+        // Inimigos feitos a mao (sem ficha no bestiario) entram no bestiario antes, para o encontro poder recria-los.
+        const criadas = new Map<string, string>(); // "Orc 1" e "Orc 2" viram uma ficha so
+        for (const i of estado.inimigos) {
+          if (i.ameacaId && bestiario.porId(i.ameacaId)) continue;
+          const nome = i.nome.replace(/ \d+$/, '');
+          i.ameacaId = criadas.get(nome)
+            ?? bestiario.lista().find((b) => b.nome.toLowerCase() === nome.toLowerCase())?.id
+            ?? bestiario.salvar({ ...i, nome }).id;
+          criadas.set(nome, i.ameacaId);
+        }
+        const e = salvos.salvarEncontro(a.nome, agruparInimigos(estado.inimigos));
+        resposta = { encontro: e };
+        depoisDeMexerNaMesa();
+        for (const c of clientes) if (c.visao === 'mestre') enviar(c, 'bestiario', bestiario.lista());
+      } else if (a.acao === 'carregar') {
+        const e = salvos.encontros.exigir(id);
+        guardarHistorico();
+        if (a.substituir) {
+          estado.inimigos = [];
+          estado.cena.bossId = null;
+          if (estado.turnos.atual && !estado.aliados.some((h) => h.id === estado.turnos.atual)) estado.turnos.atual = null;
+        }
+        const faltando: string[] = [];
+        for (const item of e.itens) {
+          const ameaca = bestiario.porId(item.ameacaId);
+          if (!ameaca) { faltando.push(item.ameacaId); continue; }
+          porNaMesa(estado, ameaca, item.quantidade, a.naTela !== false, Boolean(item.chefeFinal));
+        }
+        depoisDeMexerNaMesa();
+        resposta = { faltando: faltando.length };
+      } else if (a.acao === 'remover') {
+        salvos.encontros.remover(id);
+      } else throw new Error('Ação desconhecida.');
+    } else if (a.tipo === 'cena') {
+      if (a.acao === 'salvar') resposta = { cena: salvos.salvarCena(a.nome, estado) };
+      else if (a.acao === 'carregar') {
+        salvos.carregarCena(id, estado);
+        depoisDeMexerNaMesa();
+      } else if (a.acao === 'remover') salvos.cenas.remover(id);
+      else throw new Error('Ação desconhecida.');
+    } else throw new Error('Tipo desconhecido.');
+    for (const c of clientes) if (c.visao === 'mestre') enviar(c, 'salvos', salvos.tudo());
+    return responder(res, 200, { ok: true, ...resposta });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+// ---------------- mensagens secretas ----------------
+
+async function tratarSegredoMestre(req: Req, res: Res, url: URL) {
+  if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
+  try {
+    const a = await lerJson(req);
+    const id = String(a.id ?? '');
+    if (a.acao === 'enviar') {
+      const para = (Array.isArray(a.para) ? a.para.map(String) : []).filter((f) => fichas.porId(f));
+      segredos.enviar(para, a.texto, a.imagem);
+    } else if (a.acao === 'revelar') {
+      // Mostra a mensagem para todos no telao.
+      const s = segredos.exigir(id);
+      segredos.marcarRevelado(id, true);
+      estado.cena.revelacao = {
+        id: s.id, texto: s.texto, imagem: urlImagemSegredo(s),
+        para: s.para.map((f) => fichas.porId(f)?.nome ?? '').filter(Boolean),
+      };
+      depoisDeMexerNaMesa();
+    } else if (a.acao === 'esconder') {
+      estado.cena.revelacao = null;
+      depoisDeMexerNaMesa();
+    } else if (a.acao === 'apagar') {
+      if (estado.cena.revelacao?.id === id) { estado.cena.revelacao = null; depoisDeMexerNaMesa(); }
+      segredos.apagar(id);
+    } else {
+      throw new Error('Ação desconhecida.');
+    }
+    transmitirSegredos();
+    return responder(res, 200, { ok: true });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+/** Imagem so para um segredo: fica em data/segredos/imagens, fora das pastas publicas. */
+async function tratarImagemSegredo(req: Req, res: Res, url: URL) {
+  if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
+  try {
+    const ext = (EXT_DO_TIPO[String(req.headers['content-type'])] ?? '').replace('.jpeg', '.jpg');
+    if (!ext) throw new Error('Formato não suportado. Use PNG, JPG, WEBP, GIF ou SVG.');
+    const dados = await lerBinario(req, LIMITE_IMAGEM, 'Imagem grande demais (máximo 25 MB).');
+    if (!pareceImagem(dados, ext)) throw new Error('Isso não parece ser uma imagem.');
+    return responder(res, 200, { ok: true, imagem: segredos.guardarImagem(dados, ext) });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+async function tratarSegredoJogador(req: Req, res: Res, url: URL) {
+  const f = jogadorDe(req, url);
+  if (!f) return responder(res, 401, { ok: false, erro: 'Código inválido.' });
+  try {
+    const a = await lerJson(req);
+    if (a.acao === 'ler') segredos.marcarLida(String(a.id ?? ''), f.id);
+    else if (a.acao === 'responder') segredos.responder(String(a.id ?? ''), f.id, f.nome, a.texto);
+    else throw new Error('Ação desconhecida.');
+    transmitirSegredos();
+    return responder(res, 200, { ok: true });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+/** Imagem de um segredo: o mestre, quem recebeu (?codigo=) ou todos, depois de revelada. */
+function servirImagemSegredo(req: Req, res: Res, url: URL, id: string) {
+  const s = segredos.lista().find((x) => x.id === id);
+  const arquivo = s ? segredos.arquivoDaImagem(s.imagem) : null;
+  if (!s || !arquivo) return res.writeHead(404).end();
+  const jogador = jogadorDe(req, url);
+  const pode = s.revelado || ehMestre(req, url) || (jogador && s.para.includes(jogador.id));
+  if (!pode) return res.writeHead(403).end();
+  return servir(res, arquivo, { ...CABECALHO_IMAGEM, 'Cache-Control': 'private, no-store' });
+}
+
+/** O telao terminou de mostrar uma acao (o golpe chegou): o celular de quem agiu mostra o resumo. */
+const jaApresentadas = new Set<string>();
+async function tratarApresentado(req: Req, res: Res) {
+  try {
+    const id = String((await lerJson(req)).id ?? '').slice(0, 20);
+    if (id && !jaApresentadas.has(id)) {
+      jaApresentadas.add(id);
+      if (jaApresentadas.size > 200) jaApresentadas.delete(jaApresentadas.values().next().value!);
+      for (const c of clientes) if (c.visao === 'jogador') enviar(c, 'apresentado', { id });
+    }
+    return responder(res, 200, { ok: true });
+  } catch {
+    return responder(res, 400, { ok: false });
   }
 }
 
@@ -625,11 +845,20 @@ const servidor = http.createServer((req, res) => {
   if (rota === '/api/remover-imagem' && req.method === 'POST') return tratarRemocao(req, res, url);
   if (rota === '/api/importar-ficha' && req.method === 'POST') return tratarImportacao(req, res, url);
   if (rota === '/api/jogador/ficha') return tratarFichaJogador(req, res, url);
+  if (rota === '/api/jogador/nova' && req.method === 'POST') return tratarNovaFichaJogador(req, res);
   if (rota === '/api/jogador/foto' && req.method === 'POST') return tratarFotoJogador(req, res, url);
   if (rota === '/api/jogador/acao' && req.method === 'POST') return tratarAcaoJogador(req, res, url);
   if (rota === '/api/mestre/ficha' && req.method === 'POST') return tratarFichaMestre(req, res, url);
   if (rota === '/api/mestre/bestiario' && req.method === 'POST') return tratarBestiario(req, res, url);
   if (rota === '/api/mestre/bestiario/livro' && req.method === 'POST') return tratarLivro(req, res, url);
+  if (rota === '/api/mestre/segredo' && req.method === 'POST') return tratarSegredoMestre(req, res, url);
+  if (rota === '/api/mestre/salvos' && req.method === 'POST') return tratarSalvos(req, res, url);
+  if (rota === '/api/mestre/backup') return tratarBackup(req, res, url);
+  if (rota === '/api/mestre/segredo/imagem' && req.method === 'POST') return tratarImagemSegredo(req, res, url);
+  if (rota === '/api/jogador/segredo' && req.method === 'POST') return tratarSegredoJogador(req, res, url);
+  const imgSegredo = /^\/api\/segredo\/([\w-]+)\/imagem$/.exec(rota);
+  if (imgSegredo) return servirImagemSegredo(req, res, url, imgSegredo[1]);
+  if (rota === '/api/apresentado' && req.method === 'POST') return tratarApresentado(req, res);
   if (rota === '/api/qr') return tratarQr(res, url);
   if (rota === '/api/info') {
     return responder(res, 200, {

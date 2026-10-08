@@ -1381,12 +1381,12 @@ body.com-fundo .grupo::before {
 }
 
 .vn-atores { position: absolute; inset: 0; }
+/* Cada personagem e um ponto no chao (onde ficam os pes); o corpo cresce para cima a partir dele. */
 .vn-ator {
   position: absolute;
-  top: 0;
-  bottom: 0;
   width: 0;
-  transition: left 900ms var(--ease-suave), opacity 600ms ease;
+  height: 0;
+  transition: left 900ms var(--ease-suave), top 900ms var(--ease-suave), opacity 600ms ease;
 }
 @starting-style { .vn-ator { opacity: 0; } }
 .vn-ator.saindo { opacity: 0; }
@@ -1396,13 +1396,13 @@ body.com-fundo .grupo::before {
   bottom: 0;
   translate: -50% 0;
   transform-origin: 50% 100%;
-  transition: transform 450ms var(--ease-mola), filter 450ms ease, translate 700ms var(--ease-suave);
+  scale: var(--escala, 1);
+  transition: transform 450ms var(--ease-mola), filter 450ms ease, translate 700ms var(--ease-suave), scale 900ms var(--ease-suave);
 }
 @starting-style { .vn-corpo { translate: -50% 4vh; } }
 .vn-ator.saindo .vn-corpo { translate: -50% 4vh; transform: scale(0.94); }
-.vn-ator.falando { z-index: 5; }
-.vn-ator.falando .vn-corpo { transform: translateY(-0.8vh) scale(1.03); filter: drop-shadow(0 0 2.6vh color-mix(in srgb, var(--cor) 55%, transparent)); }
-.vn-ator.calado .vn-corpo { transform: scale(0.96); filter: brightness(0.46) saturate(0.6); }
+.vn-ator.falando .vn-corpo { transform: translateY(-0.8vh) scale(1.04); filter: drop-shadow(0 0 2.6vh color-mix(in srgb, var(--cor) 55%, transparent)); }
+.vn-ator.calado .vn-corpo { transform: scale(0.97); filter: brightness(0.46) saturate(0.6); }
 .vn-ator.falando .vn-pulo { animation: vnPulo 520ms var(--ease-mola); }
 @keyframes vnPulo {
   0% { transform: translateY(0); }
@@ -1410,12 +1410,13 @@ body.com-fundo .grupo::before {
   100% { transform: translateY(0); }
 }
 
-.vn-sprite { position: relative; background: center / cover no-repeat; display: grid; place-items: center; }
+.vn-sprite { position: relative; background: center / cover no-repeat; display: grid; place-items: center; animation: vnTroca 500ms ease; }
+@keyframes vnTroca { from { opacity: 0.2; filter: brightness(1.6); } to { opacity: 1; filter: none; } }
 .vn-iniciais { font: 700 9vh var(--fonte-titulo); color: color-mix(in srgb, var(--cor) 70%, white); text-shadow: 0 0 3vh var(--cor); }
 .vn-ator.espelhado .vn-sprite { transform: scaleX(-1); }
 .vn-ator.espelhado .vn-iniciais { transform: scaleX(-1); }
 
-/* PNG recortado: personagem de corpo inteiro, atras da caixa de dialogo. */
+/* PNG recortado: personagem de corpo inteiro. */
 .vn-ator.recortado .vn-sprite {
   width: min(52vh, 30vw, calc(110vw / var(--n, 3)));
   height: 84vh;
@@ -1423,10 +1424,8 @@ body.com-fundo .grupo::before {
   background-position: bottom center;
   filter: drop-shadow(0 0 1.6vh rgba(0, 0, 0, 0.55));
 }
-.vn-ator.recortado .vn-corpo { bottom: -2vh; }
 
-/* Retrato comum: carta alta com moldura, acima da caixa de dialogo. */
-.vn-ator.moldurado .vn-corpo { bottom: 29vh; }
+/* Retrato comum: carta alta com moldura, em pe no chao. */
 .vn-ator.moldurado .vn-sprite {
   width: min(31vh, 18vw, calc(84vw / var(--n, 3)));
   height: min(43vh, 25vw, calc(117vw / var(--n, 3)));
@@ -1439,6 +1438,7 @@ body.com-fundo .grupo::before {
     0 3vh 6vh rgba(0, 0, 0, 0.7),
     0 0 5vh color-mix(in srgb, var(--cor) 28%, transparent);
 }
+.vn-ator.moldurado .vn-corpo { bottom: 2.4vh; }
 .vn-plaquinha {
   position: absolute;
   left: 50%;
@@ -1456,69 +1456,35 @@ body.com-fundo .grupo::before {
 .vn-sombra {
   position: absolute;
   left: 0;
-  bottom: 0.5vh;
-  width: 30vh;
-  height: 4vh;
-  translate: -50% 0;
-  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.55), transparent);
-  transition: opacity 400ms;
-}
-.vn-ator.moldurado .vn-sombra { bottom: 26vh; width: 34vh; }
-
-/* Caixa de dialogo */
-.vn-caixa {
-  position: absolute;
-  z-index: 6;
-  left: 50%;
-  bottom: 3vh;
-  translate: -50% 0;
-  width: min(90vw, 156vh);
-  min-height: 21vh;
-  padding: 4.2vh 3.4vw 3.4vh;
-  border-radius: 1.6vh;
-  background: linear-gradient(180deg, rgba(22, 14, 31, 0.88), rgba(9, 6, 13, 0.95));
-  box-shadow:
-    inset 0 0 0 1px rgba(232, 195, 122, 0.45),
-    inset 0 0 0 0.6vh rgba(9, 6, 13, 0.55),
-    inset 0 0 0 calc(0.6vh + 1px) color-mix(in srgb, var(--cor) 35%, transparent),
-    0 2vh 5vh rgba(0, 0, 0, 0.6),
-    0 0 6vh color-mix(in srgb, var(--cor) 16%, transparent);
-  backdrop-filter: blur(8px);
-  animation: vnCaixaEntra 380ms var(--ease-suave);
-}
-@keyframes vnCaixaEntra { from { opacity: 0.4; translate: -50% 1.2vh; } to { opacity: 1; translate: -50% 0; } }
-.vn-nome {
-  position: absolute;
   top: 0;
-  left: 3.2vw;
-  translate: 0 -55%;
-  padding: 0.8vh 2.4vh 0.9vh;
-  border-radius: 0.8vh;
-  font: 700 2.9vh/1 var(--fonte-titulo);
-  letter-spacing: 0.05em;
-  color: #fff;
-  text-shadow: 0 0.15vh 0.4vh rgba(0, 0, 0, 0.75);
-  background: linear-gradient(180deg, color-mix(in srgb, var(--cor) 70%, white), var(--cor) 55%, color-mix(in srgb, var(--cor) 60%, black));
-  box-shadow: 0 0 0 0.3vh rgba(9, 6, 13, 0.9), 0 0 0 0.45vh color-mix(in srgb, var(--cor) 60%, white), 0 1vh 2vh rgba(0, 0, 0, 0.5);
+  width: calc(30vh * var(--escala, 1));
+  height: calc(4vh * var(--escala, 1));
+  translate: -50% -50%;
+  background: radial-gradient(closest-side, rgba(0, 0, 0, 0.6), transparent);
+  transition: width 900ms var(--ease-suave), height 900ms var(--ease-suave);
 }
-.vn-texto {
-  margin: 0;
-  font: 400 3.3vh/1.5 var(--fonte-titulo);
-  color: #f7efdf;
-  text-shadow: 0 0.2vh 0.4vh rgba(0, 0, 0, 0.8);
-  white-space: pre-wrap;
+
+/* Placa com o nome de quem esta falando. */
+.vn-placa {
+  position: absolute;
+  z-index: 300;
+  left: 4vw;
+  bottom: 5vh;
+  padding: 1.2vh 3.4vh 1.3vh;
+  border-radius: 1vh;
+  background: linear-gradient(180deg, rgba(22, 14, 31, 0.92), rgba(9, 6, 13, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(232, 195, 122, 0.5),
+    inset 0.6vh 0 0 var(--cor),
+    0 1.6vh 4vh rgba(0, 0, 0, 0.6),
+    0 0 5vh color-mix(in srgb, var(--cor) 25%, transparent);
+  animation: vnPlaca 450ms var(--ease-mola);
 }
-.vn-resto { visibility: hidden; }
-.vn-caixa.narrador .vn-texto { font-style: italic; text-align: center; color: #efe3c8; }
-.vn-caixa.narrador .vn-nome { left: 50%; translate: -50% -55%; color: #2a1a08; text-shadow: 0 1px 0 rgba(255, 255, 255, 0.4); background: linear-gradient(180deg, #fff2cc, #e8c37a 60%, #b8893c); }
-.vn-seta { position: absolute; right: 2.4vw; bottom: 1.8vh; font-style: normal; font-size: 2.1vh; color: var(--ouro); opacity: 0; }
-.vn-seta.visivel { opacity: 1; animation: vnSeta 1s ease-in-out infinite; }
-@keyframes vnSeta { 50% { transform: translateY(0.6vh); } }
-.vn-canto { position: absolute; width: 2.2vh; height: 2.2vh; border: 0.3vh solid rgba(232, 195, 122, 0.85); }
-.vn-canto.c1 { top: 0.9vh; left: 0.9vh; border-right: 0; border-bottom: 0; border-top-left-radius: 0.6vh; }
-.vn-canto.c2 { top: 0.9vh; right: 0.9vh; border-left: 0; border-bottom: 0; border-top-right-radius: 0.6vh; }
-.vn-canto.c3 { bottom: 0.9vh; left: 0.9vh; border-right: 0; border-top: 0; border-bottom-left-radius: 0.6vh; }
-.vn-canto.c4 { bottom: 0.9vh; right: 0.9vh; border-left: 0; border-top: 0; border-bottom-right-radius: 0.6vh; }
+.vn-placa b { font: 700 3.6vh/1 var(--fonte-titulo); letter-spacing: 0.06em; color: #fff4dc; text-shadow: 0 0.2vh 0.6vh rgba(0, 0, 0, 0.8), 0 0 2vh color-mix(in srgb, var(--cor) 60%, transparent); }
+@keyframes vnPlaca { from { opacity: 0; translate: -3vw 0; } to { opacity: 1; translate: 0 0; } }
+.vn-canto { position: absolute; width: 1.8vh; height: 1.8vh; border: 0.3vh solid rgba(232, 195, 122, 0.85); }
+.vn-canto.c1 { top: 0.6vh; left: 1.2vh; border-right: 0; border-bottom: 0; border-top-left-radius: 0.5vh; }
+.vn-canto.c4 { bottom: 0.6vh; right: 0.6vh; border-left: 0; border-top: 0; border-bottom-right-radius: 0.5vh; }
 
 .aviso-som {
   position: fixed;
@@ -1535,3 +1501,39 @@ body.com-fundo .grupo::before {
   opacity: 0.85;
 }
 .aviso-som.mudo { opacity: 0.5; }
+
+/* ---------------- segredo revelado ---------------- */
+.revelacao {
+  position: absolute; inset: 0; z-index: 26; display: grid; place-items: center; padding: 6vh 8vw;
+  background: radial-gradient(80% 70% at 50% 50%, rgba(10, 6, 16, 0.55), rgba(5, 3, 8, 0.88));
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity 500ms ease, visibility 0s 500ms;
+}
+.revelacao.aberta { opacity: 1; visibility: visible; transition: opacity 500ms ease; }
+.revelacao-carta {
+  position: relative; display: grid; gap: 2vh; justify-items: center; max-width: min(70vw, 120vh); max-height: 86vh;
+  padding: 5vh 5vh 4vh; border-radius: 1.6vh; color: #2b1d10; text-align: center;
+  background: linear-gradient(180deg, #f3e6c8, #e2cfa2 70%, #cdb57f);
+  box-shadow: 0 0 0 0.2vh rgba(90, 60, 20, 0.6), inset 0 0 8vh rgba(120, 80, 30, 0.35), 0 4vh 10vh rgba(0, 0, 0, 0.75);
+  animation: cartaRevela 900ms var(--ease-mola);
+}
+@keyframes cartaRevela {
+  0% { opacity: 0; transform: scale(0.6) rotate(-6deg); filter: brightness(2); }
+  60% { opacity: 1; transform: scale(1.04) rotate(1deg); filter: none; }
+  100% { transform: none; }
+}
+.revelacao-selo {
+  position: absolute; top: -4vh; left: 50%; width: 8vh; height: 8vh; translate: -50% 0; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #e0504c, #9a1c1c 60%, #6a0e10);
+  box-shadow: 0 0.8vh 1.6vh rgba(60, 10, 10, 0.5), inset 0 -0.5vh 1vh rgba(0, 0, 0, 0.35);
+  animation: seloQuebra 900ms var(--ease-mola) both;
+}
+/* Rachadura do lacre quebrado. */
+.revelacao-selo::after {
+  content: ''; position: absolute; left: 46%; top: -5%; width: 8%; height: 110%;
+  background: #f3e6c8; transform: rotate(14deg); clip-path: polygon(40% 0, 100% 0, 30% 45%, 90% 55%, 20% 100%, 0 100%, 60% 52%, 0 42%);
+}
+@keyframes seloQuebra { from { transform: scale(1.6); opacity: 0; } }
+.revelacao-carta small { font: 600 1.8vh var(--fonte); letter-spacing: 0.14em; text-transform: uppercase; color: #6a4e2e; }
+.revelacao-carta img { max-width: 100%; max-height: 52vh; object-fit: contain; border-radius: 1vh; box-shadow: 0 0 0 0.15vh rgba(90, 60, 20, 0.4); }
+.revelacao-carta p { margin: 0; font: 3.4vh/1.45 var(--fonte-titulo); white-space: pre-wrap; overflow-y: auto; }
