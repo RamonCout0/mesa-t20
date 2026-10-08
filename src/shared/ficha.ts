@@ -1,0 +1,92 @@
+// Ficha de personagem jogador: o que a mesa guarda de cada heroi (importado do Nimb ou feito a mao).
+import type { Ataque, Atributo, TipoDano } from './tipos.ts';
+
+/** As 30 linhas de pericia da ficha (mesma ordem do PDF do Nimb). */
+export const PERICIAS = [
+  'Acrobacia', 'Adestramento', 'Atletismo', 'Atuação', 'Cavalgar', 'Conhecimento', 'Cura', 'Diplomacia', 'Enganação',
+  'Fortitude', 'Furtividade', 'Guerra', 'Iniciativa', 'Intimidação', 'Intuição', 'Investigação', 'Jogatina', 'Ladinagem',
+  'Luta', 'Misticismo', 'Nobreza', 'Ofício 1', 'Ofício 2', 'Percepção', 'Pilotagem', 'Pontaria', 'Reflexos', 'Religião',
+  'Sobrevivência', 'Vontade',
+] as const;
+
+export interface Pericia {
+  total: number;
+  treinada: boolean;
+  atributo: Atributo;
+  /** Nome livre (ex.: Ofício (Ferreiro)). */
+  rotulo?: string;
+}
+
+export interface Poder {
+  nome: string;
+  texto: string;
+}
+
+export interface Ficha {
+  id: string;
+  /** Credencial do celular do jogador (vai no QR code). Nunca sai para o telao. */
+  codigo: string;
+  fonte: 'nimb' | 'manual';
+  criadaEm: number;
+  atualizadaEm: number;
+
+  nome: string;
+  jogador: string;
+  raca: string;
+  origem: string;
+  classe: string;
+  nivel: number;
+  divindade: string;
+
+  atributos: Record<Atributo, number>;
+  pvMax: number;
+  pmMax: number;
+  defesa: number;
+  deslocamento: number;
+  pericias: Record<string, Pericia>;
+  ataques: Ataque[];
+  /** Ids do grimorio (src/shared/dados/magias.json). */
+  magias: string[];
+  /** Magias da ficha que o grimorio nao conhece (homebrew etc.). */
+  magiasExtras: string[];
+  /** Atributo-chave das magias; null para quem nao conjura. */
+  atributoChave: Atributo | null;
+  /** Soma na CD de todas as magias (ex.: Fortalecimento Arcano). */
+  bonusCd: number;
+  rd: Partial<Record<TipoDano | 'geral', number>>;
+  poderes: Poder[];
+  proficiencias: string;
+  equipamento: string;
+  notas: string;
+
+  imagem: string;
+  cor: string;
+  /** Modelo de dado escolhido pelo jogador (ver shared/dados-3d.ts). */
+  dado: string;
+}
+
+/** CD para resistir as magias: 10 + metade do nivel + atributo-chave (Tormenta20, p. 172). */
+export function cdMagia(f: Pick<Ficha, 'nivel' | 'atributos' | 'atributoChave' | 'bonusCd'>) {
+  if (!f.atributoChave) return null;
+  return 10 + Math.floor(f.nivel / 2) + f.atributos[f.atributoChave] + f.bonusCd;
+}
+
+/** Limite de PM por habilidade (inclusive magia com aprimoramentos) = nivel. */
+export const limitePm = (f: Pick<Ficha, 'nivel'>) => f.nivel;
+
+/** Custo base por circulo (Tormenta20, tabela 4-1). */
+export const CUSTO_CIRCULO = [0, 1, 3, 6, 10, 15];
+
+/** Atributo-chave padrao de cada classe conjuradora. */
+export function atributoChavePadrao(classe: string, poderes: Poder[] = []): Atributo | null {
+  const c = classe.toLowerCase();
+  if (c.includes('arcanista')) {
+    const caminho = poderes.find((p) => /caminho do arcanista/i.test(p.nome))?.texto.toLowerCase() ?? '';
+    return caminho.includes('feiticeiro') ? 'car' : 'int';
+  }
+  if (c.includes('bardo')) return 'car';
+  if (c.includes('clérigo') || c.includes('clerigo') || c.includes('druida') || c.includes('frade')) return 'sab';
+  if (c.includes('inventor')) return 'int';
+  if (c.includes('paladino')) return 'car';
+  return null;
+}

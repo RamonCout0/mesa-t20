@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">
+  <defs>
+    <linearGradient id="ceu" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1b1035"/>
+      <stop offset="0.45" stop-color="#5a2b52"/>
+      <stop offset="0.72" stop-color="#d4704a"/>
+      <stop offset="1" stop-color="#f3b66b"/>
+    </linearGradient>
+    <radialGradient id="sol" cx="0.62" cy="0.7" r="0.25">
+      <stop offset="0" stop-color="#fff1c2" stop-opacity="1"/>
+      <stop offset="0.25" stop-color="#ffc56b" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#ff8a4a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="m1" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4b2c5c"/><stop offset="1" stop-color="#2a1838"/></linearGradient>
+    <linearGradient id="m2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2b1a35"/><stop offset="1" stop-color="#160d1d"/></linearGradient>
+    <linearGradient id="chao" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1222"/><stop offset="1" stop-color="#08050b"/></linearGradient>
+    <linearGradient id="estrada" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c98a5a" stop-opacity="0.55"/><stop offset="1" stop-color="#3a2530" stop-opacity="0.9"/></linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#ceu)"/>
+  <circle cx="1190" cy="760" r="520" fill="url(#sol)"/>
+  <g fill="#fff" opacity="0.7">
+    <circle cx="210" cy="90" r="2"/><circle cx="420" cy="160" r="1.5"/><circle cx="640" cy="70" r="2.2"/><circle cx="880" cy="140" r="1.4"/>
+    <circle cx="1100" cy="60" r="1.8"/><circle cx="1350" cy="120" r="1.5"/><circle cx="1600" cy="80" r="2.2"/><circle cx="1780" cy="170" r="1.4"/>
+  </g>
+  <circle cx="1560" cy="210" r="46" fill="#fff4dc" opacity="0.92"/>
+  <circle cx="1578" cy="198" r="44" fill="#3c2148" opacity="0.85"/>
+  <path d="M0 640 L180 520 L330 600 L520 450 L700 580 L860 500 L1040 610 L1260 470 L1440 590 L1620 500 L1800 580 L1920 540 L1920 1080 L0 1080 Z" fill="url(#m1)" opacity="0.9"/>
+  <path d="M0 760 L240 640 L420 720 L640 610 L860 740 L1080 650 L1300 760 L1520 660 L1720 740 L1920 680 L1920 1080 L0 1080 Z" fill="url(#m2)"/>
+  <path d="M0 860 Q960 760 1920 860 L1920 1080 L0 1080 Z" fill="url(#chao)"/>
+  <path d="M900 800 Q930 790 980 800 L1340 1080 L520 1080 Z" fill="url(#estrada)"/>
+  <g fill="#0b070e">
+    <path d="M120 900 l40 -200 l40 200 z"/><path d="M190 920 l55 -260 l55 260 z"/><path d="M1650 910 l45 -230 l45 230 z"/>
+    <path d="M1720 930 l60 -300 l60 300 z"/><path d="M1820 920 l40 -190 l40 190 z"/>
+    <rect x="1335" y="760" width="8" height="90"/><path d="M1300 770 h80 l-40 -40 z"/>
+  </g>
+  <g fill="#ffd27a" opacity="0.9"><circle cx="1339" cy="790" r="5"/></g>
+</svg>

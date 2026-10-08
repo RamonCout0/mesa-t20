@@ -1,5 +1,5 @@
 {
-  "versao": 2,
+  "versao": 3,
   "aliados": [
     {
       "id": "6b9d6da0",
@@ -8,6 +8,8 @@
       "pv": 4,
       "pvMax": 62,
       "pvTemp": 0,
+      "pm": 15,
+      "pmMax": 15,
       "defesa": 24,
       "bonusIni": 2,
       "iniciativa": null,
@@ -16,8 +18,7 @@
       "classe": "Guerreiro",
       "nivel": 5,
       "cor": "#d9534f",
-      "pm": 15,
-      "pmMax": 15
+      "fichaId": null
     },
     {
       "id": "52576ba9",
@@ -26,6 +27,8 @@
       "pv": 31,
       "pvMax": 31,
       "pvTemp": 0,
+      "pm": 34,
+      "pmMax": 34,
       "defesa": 17,
       "bonusIni": 3,
       "iniciativa": null,
@@ -34,16 +37,17 @@
       "classe": "Arcanista",
       "nivel": 5,
       "cor": "#9b6bff",
-      "pm": 34,
-      "pmMax": 34
+      "fichaId": null
     },
     {
       "id": "19bd00b3",
       "nome": "Thorn",
       "imagem": "/personagens/thorn.svg",
-      "pv": 48,
+      "pv": 38,
       "pvMax": 48,
       "pvTemp": 0,
+      "pm": 20,
+      "pmMax": 20,
       "defesa": 21,
       "bonusIni": 5,
       "iniciativa": null,
@@ -52,8 +56,7 @@
       "classe": "Caçador",
       "nivel": 5,
       "cor": "#4caf6e",
-      "pm": 20,
-      "pmMax": 20
+      "fichaId": null
     },
     {
       "id": "bfb0818c",
@@ -62,6 +65,8 @@
       "pv": 44,
       "pvMax": 44,
       "pvTemp": 0,
+      "pm": 28,
+      "pmMax": 28,
       "defesa": 20,
       "bonusIni": 1,
       "iniciativa": null,
@@ -70,8 +75,7 @@
       "classe": "Clériga",
       "nivel": 5,
       "cor": "#f2c94c",
-      "pm": 28,
-      "pmMax": 28
+      "fichaId": null
     },
     {
       "id": "befc244b",
@@ -80,6 +84,8 @@
       "pv": 70,
       "pvMax": 70,
       "pvTemp": 0,
+      "pm": 10,
+      "pmMax": 10,
       "defesa": 22,
       "bonusIni": 1,
       "iniciativa": null,
@@ -88,8 +94,7 @@
       "classe": "Bárbaro",
       "nivel": 5,
       "cor": "#ff8c42",
-      "pm": 10,
-      "pmMax": 10
+      "fichaId": null
     },
     {
       "id": "3f0a7a09",
@@ -98,6 +103,8 @@
       "pv": 38,
       "pvMax": 38,
       "pvTemp": 0,
+      "pm": 26,
+      "pmMax": 26,
       "defesa": 19,
       "bonusIni": 4,
       "iniciativa": null,
@@ -106,8 +113,28 @@
       "classe": "Bardo",
       "nivel": 5,
       "cor": "#3ec9c0",
-      "pm": 26,
-      "pmMax": 26
+      "fichaId": null
+    },
+    {
+      "id": "aef5bcc8",
+      "nome": "Farandhil",
+      "imagem": "",
+      "pv": -3,
+      "pvMax": 19,
+      "pvTemp": 0,
+      "pm": 37,
+      "pmMax": 42,
+      "defesa": 11,
+      "bonusIni": 3,
+      "iniciativa": 30,
+      "condicoes": [
+        "inconsciente"
+      ],
+      "jogador": "",
+      "classe": "Arcanista",
+      "nivel": 5,
+      "cor": "#e9c46a",
+      "fichaId": "5fbc5519"
     }
   ],
   "inimigos": [
@@ -118,6 +145,8 @@
       "pv": 0,
       "pvMax": 320,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 28,
       "bonusIni": 6,
       "iniciativa": null,
@@ -146,15 +175,25 @@
           "nome": "Fúria da fênix",
           "ativa": false
         }
-      ]
+      ],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": null
     },
     {
       "id": "ea3060e4",
       "nome": "Cultista das Cinzas",
       "imagem": "/bosses/cultista.svg",
-      "pv": 28,
+      "pv": 8,
       "pvMax": 28,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 14,
       "bonusIni": 1,
       "iniciativa": null,
@@ -166,15 +205,25 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": null
     },
     {
       "id": "eb0c3644",
       "nome": "Cultista das Cinzas 2",
       "imagem": "/bosses/cultista.svg",
-      "pv": 28,
+      "pv": 8,
       "pvMax": 28,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 14,
       "bonusIni": 1,
       "iniciativa": null,
@@ -186,7 +235,15 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": "c7a6a6ef"
     },
     {
       "id": "dd8b76c5",
@@ -195,6 +252,8 @@
       "pv": 47,
       "pvMax": 90,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 22,
       "bonusIni": 0,
       "iniciativa": null,
@@ -206,7 +265,15 @@
       "tema": "fogo",
       "tier": "comum",
       "notas": "Emboscada: só aparece quando o mestre revelar.",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": null
     },
     {
       "id": "361a713e",
@@ -215,6 +282,8 @@
       "pv": 30,
       "pvMax": 30,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 12,
       "bonusIni": 0,
       "iniciativa": null,
@@ -226,7 +295,15 @@
       "tema": "trevas",
       "tier": "comum",
       "notas": "",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": null
     },
     {
       "id": "b6aab35b",
@@ -235,6 +312,8 @@
       "pv": 30,
       "pvMax": 30,
       "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
       "defesa": 12,
       "bonusIni": 0,
       "iniciativa": null,
@@ -246,17 +325,235 @@
       "tema": "trevas",
       "tier": "comum",
       "notas": "zxccxz",
-      "habilidades": []
+      "habilidades": [],
+      "fort": 0,
+      "ref": 0,
+      "von": 0,
+      "rd": {},
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [],
+      "ameacaId": null
+    },
+    {
+      "id": "47d22cf0",
+      "nome": "Orc Chefe 1",
+      "imagem": "",
+      "pv": 66,
+      "pvMax": 66,
+      "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
+      "defesa": 19,
+      "bonusIni": 5,
+      "iniciativa": null,
+      "condicoes": [],
+      "subtitulo": "Humanoide (orc) Médio",
+      "nd": "ND 2",
+      "naTela": true,
+      "revelar": "oculto",
+      "tema": "trevas",
+      "tier": "comum",
+      "notas": "For 4, Des 1, Con 3, Int –1, Sab 0, Car 0\nPerícias: Intimidação +5\nEquipamento: Machado de batalha, cota de malha. Tesouro Padrão.",
+      "habilidades": [
+        {
+          "nome": "Sangue Quente",
+          "ativa": false
+        }
+      ],
+      "fort": 13,
+      "ref": 7,
+      "von": 2,
+      "rd": {
+        "fogo": 5
+      },
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [
+        {
+          "id": "at1",
+          "nome": "Machado de batalha",
+          "bonus": 11,
+          "dano": "1d8+12",
+          "tipoDano": "corte",
+          "margem": 20,
+          "mult": 3,
+          "alcance": "Corpo a corpo",
+          "distancia": false,
+          "arquetipo": "corte"
+        }
+      ],
+      "ameacaId": "66faac05"
+    },
+    {
+      "id": "82679b9e",
+      "nome": "Orc Chefe 2",
+      "imagem": "",
+      "pv": 66,
+      "pvMax": 66,
+      "pvTemp": 0,
+      "pm": 0,
+      "pmMax": 0,
+      "defesa": 19,
+      "bonusIni": 5,
+      "iniciativa": null,
+      "condicoes": [
+        "enredado"
+      ],
+      "subtitulo": "Humanoide (orc) Médio",
+      "nd": "ND 2",
+      "naTela": true,
+      "revelar": "oculto",
+      "tema": "trevas",
+      "tier": "comum",
+      "notas": "For 4, Des 1, Con 3, Int –1, Sab 0, Car 0\nPerícias: Intimidação +5\nEquipamento: Machado de batalha, cota de malha. Tesouro Padrão.",
+      "habilidades": [
+        {
+          "nome": "Sangue Quente",
+          "ativa": false
+        }
+      ],
+      "fort": 13,
+      "ref": 7,
+      "von": 2,
+      "rd": {
+        "fogo": 5
+      },
+      "imunidades": [],
+      "vulnerabilidades": [],
+      "ataques": [
+        {
+          "id": "at1",
+          "nome": "Machado de batalha",
+          "bonus": 11,
+          "dano": "1d8+12",
+          "tipoDano": "corte",
+          "margem": 20,
+          "mult": 3,
+          "alcance": "Corpo a corpo",
+          "distancia": false,
+          "arquetipo": "corte"
+        }
+      ],
+      "ameacaId": "66faac05"
     }
   ],
   "cena": {
+    "modo": "combate",
     "bossId": "b3f18707",
     "idInvocacao": "45269121",
-    "mostrar": null
+    "mostrar": null,
+    "palco": {
+      "fundo": "/cenarios/taverna.svg",
+      "atores": [
+        {
+          "id": "08c8b18a",
+          "refId": "52576ba9",
+          "nome": "Lyra",
+          "imagem": "/personagens/lyra.svg",
+          "cor": "#9b6bff",
+          "x": 39,
+          "espelhar": false
+        },
+        {
+          "id": "473d9619",
+          "refId": "befc244b",
+          "nome": "Brom",
+          "imagem": "/personagens/brom.svg",
+          "cor": "#ff8c42",
+          "x": 37,
+          "espelhar": false
+        },
+        {
+          "id": "e0025363",
+          "refId": null,
+          "nome": "Taverneiro Gruff",
+          "imagem": "/bosses/golem.svg",
+          "cor": "#e0a85a",
+          "x": 88,
+          "espelhar": true
+        },
+        {
+          "id": "0d646991",
+          "refId": "aef5bcc8",
+          "nome": "Farandhil",
+          "imagem": "",
+          "cor": "#e9c46a",
+          "x": 12,
+          "espelhar": false
+        }
+      ],
+      "fala": {
+        "id": "f0622e80",
+        "atorId": "0d646991",
+        "nome": "Farandhil",
+        "cor": "#e9c46a",
+        "texto": "Guarde a cerveja, taverneiro. Quero saber quem está nos observando lá fora.",
+        "em": 1791424806023,
+        "jogador": true
+      },
+      "falas": [
+        {
+          "id": "77df187b",
+          "atorId": "e0025363",
+          "nome": "Taverneiro Gruff",
+          "cor": "#e0a85a",
+          "texto": "Mais uma rodada? A casa não fia para aventureiros, mas para quem matou o dragão das cinzas... talvez eu abra uma exceção.",
+          "em": 1791424676972
+        },
+        {
+          "id": "23030c55",
+          "atorId": null,
+          "nome": "",
+          "cor": "#e8c37a",
+          "texto": "A chuva bate nas janelas da Taverna do Javali Cego. Lá fora, algo observa.",
+          "em": 1791424714274
+        },
+        {
+          "id": "f0622e80",
+          "atorId": "0d646991",
+          "nome": "Farandhil",
+          "cor": "#e9c46a",
+          "texto": "Guarde a cerveja, taverneiro. Quero saber quem está nos observando lá fora.",
+          "em": 1791424806023,
+          "jogador": true
+        }
+      ]
+    }
   },
   "turnos": {
-    "ativo": false,
+    "ativo": true,
     "rodada": 1,
-    "atual": null
-  }
+    "atual": "aef5bcc8"
+  },
+  "opcoes": {
+    "importarPeloCelular": true,
+    "acaoSoNaVez": false,
+    "falasPeloCelular": true
+  },
+  "efeitos": [],
+  "temporizadores": [],
+  "pedidos": [
+    {
+      "id": "0aec270a",
+      "pericia": "Percepção",
+      "cd": 15,
+      "secreto": false,
+      "alvos": [
+        "aef5bcc8",
+        "52576ba9"
+      ],
+      "respostas": {
+        "aef5bcc8": {
+          "total": 13,
+          "passou": false
+        },
+        "52576ba9": {
+          "total": 15,
+          "passou": true
+        }
+      },
+      "criadoEm": 1791425552273
+    }
+  ]
 }

@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/estado.json
+data/fichas/
+data/bestiario/
+lixeira/
+*.log
+data/registro.json
