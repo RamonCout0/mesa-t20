@@ -5,11 +5,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomInt, randomUUID } from 'node:crypto';
+import { gastoNovo } from '../shared/execucao.ts';
 import { CONDICAO_POR_ID, TEMAS, TIERS, REVELAR, EFEITOS } from '../shared/condicoes.ts';
 import { pvDepoisDoDano } from '../shared/modificadores.ts';
 import type {
   Estado, Heroi, Inimigo, Entidade, Lado, Evento, EventoValor, EstadoPublico, InimigoPublico, FichaOrdem, Habilidade, Ataque,
-  Ator, Cena, Palco,
+  Ator, Cena, Palco, TipoDano,
 } from '../shared/tipos.ts';
 import { TIPOS_DANO } from '../shared/tipos.ts';
 import type { EfeitoAtivo } from '../shared/acoes.ts';
@@ -83,12 +84,33 @@ const CAMPOS: Record<string, Validador> = {
     .filter(([k]) => k === 'geral' || (TIPOS_DANO as readonly string[]).includes(k)).map(([k, n]) => [k, num(n, 0, 200)]).filter(([, n]) => n)),
   imunidades: listaTexto,
   vulnerabilidades: listaTexto,
-  habilidades: (v): Habilidade[] =>
-    (Array.isArray(v) ? v : [])
-      .slice(0, 16)
-      .map((h) => ({ nome: txt(h?.nome, 40), ativa: Boolean(h?.ativa) }))
-      .filter((h) => h.nome),
+  habilidades: (v): Habilidade[] => (Array.isArray(v) ? v : []).slice(0, 40).map(validarHabilidade).filter((h) => h.nome),
 };
+
+const ALVOS_HABILIDADE = ['inimigos', 'um', 'si', 'aliados', 'nenhum'];
+
+/** Habilidade de inimigo: nome e chip do telao, mais o que o botao de usar faz (tudo opcional). */
+function validarHabilidade(h: Record<string, unknown>): Habilidade {
+  const dano = String(h?.dano ?? '').replace(/\s/g, '');
+  const cura = String(h?.cura ?? '').replace(/\s/g, '');
+  const res = ['fort', 'ref', 'von'].includes(String(h?.res)) ? (h.res as 'fort' | 'ref' | 'von') : '';
+  const tipoDano = (TIPOS_DANO as readonly string[]).includes(String(h?.tipoDano)) ? h.tipoDano as TipoDano : '';
+  const condicoes = (Array.isArray(h?.condicoes) ? h.condicoes : []).map(String).filter((c) => CONDICAO_POR_ID[c.split(':')[0]]).slice(0, 4);
+  const pm = num(h?.pm, 0, 999);
+  return {
+    nome: txt(h?.nome, 60),
+    ativa: Boolean(h?.ativa),
+    ...(h?.texto ? { texto: txt(h.texto, 3000) } : {}),
+    ...(h?.execucao ? { execucao: txt(h.execucao, 30) } : {}),
+    ...(pm ? { pm } : {}),
+    ...(ALVOS_HABILIDADE.includes(String(h?.alvo)) ? { alvo: h.alvo as Habilidade['alvo'] } : {}),
+    ...(dano && expressaoValida(dano) ? { dano } : {}),
+    ...(tipoDano ? { tipoDano } : {}),
+    ...(cura && expressaoValida(cura) ? { cura } : {}),
+    ...(res ? { res, cd: num(h?.cd ?? 15, 1, 99), sucesso: h?.sucesso === 'anula' ? 'anula' as const : 'metade' as const } : {}),
+    ...(condicoes.length ? { condicoes } : {}),
+  };
+}
 
 const CAMPOS_DO_LADO: Record<Lado, string[]> = {
   aliados: ['nome', 'jogador', 'classe', 'nivel', 'imagem', 'cor', 'pv', 'pvMax', 'pvTemp', 'pm', 'pmMax', 'defesa', 'bonusIni', 'iniciativa'],
@@ -128,48 +150,20 @@ export function criar(lado: Lado, dados: Record<string, unknown> = {}): Entidade
   return ent;
 }
 
-// ---------------- estado inicial (demonstracao) ----------------
+// ---------------- estado inicial (mesa vazia) ----------------
 
-const OPCOES_PADRAO = { importarPeloCelular: true, acaoSoNaVez: false, fichaLivre: true, zerarAntes: true, iniciativaUnica: true };
+const OPCOES_PADRAO = { importarPeloCelular: true, acaoSoNaVez: true, fichaLivre: true, zerarAntes: true, iniciativaUnica: true };
 export const palcoVazio = (): Palco => ({ fundo: '', atores: [], destaque: null });
 const cenaVazia = (): Cena => ({ modo: 'combate', bossId: null, idInvocacao: '', mostrar: null, palco: palcoVazio(), revelacao: null });
 
-export function estadoDemo(): Estado {
-  const heroi = (d: Record<string, unknown>) => criar('aliados', d) as Heroi;
-  const inimigo = (d: Record<string, unknown>) => criar('inimigos', d) as Inimigo;
+/** Mesa vazia: sem herois nem inimigos de exemplo. As fichas e o bestiario ficam em data/. */
+export function estadoVazio(): Estado {
   return {
     versao: 3,
-    aliados: [
-      heroi({ nome: 'Aldric', jogador: 'Jogador 1', classe: 'Guerreiro', nivel: 5, pvMax: 62, pmMax: 15, defesa: 24, cor: '#d9534f', imagem: '/personagens/aldric.svg', bonusIni: 2 }),
-      heroi({ nome: 'Lyra', jogador: 'Jogador 2', classe: 'Arcanista', nivel: 5, pvMax: 31, pmMax: 34, defesa: 17, cor: '#9b6bff', imagem: '/personagens/lyra.svg', bonusIni: 3 }),
-      heroi({ nome: 'Thorn', jogador: 'Jogador 3', classe: 'Caçador', nivel: 5, pvMax: 48, pmMax: 20, defesa: 21, cor: '#4caf6e', imagem: '/personagens/thorn.svg', bonusIni: 5 }),
-      heroi({ nome: 'Mirela', jogador: 'Jogador 4', classe: 'Clériga', nivel: 5, pvMax: 44, pmMax: 28, defesa: 20, cor: '#f2c94c', imagem: '/personagens/mirela.svg', bonusIni: 1 }),
-      heroi({ nome: 'Brom', jogador: 'Jogador 5', classe: 'Bárbaro', nivel: 5, pvMax: 70, pmMax: 10, defesa: 22, cor: '#ff8c42', imagem: '/personagens/brom.svg', bonusIni: 1 }),
-      heroi({ nome: 'Seren', jogador: 'Jogador 6', classe: 'Bardo', nivel: 5, pvMax: 38, pmMax: 26, defesa: 19, cor: '#3ec9c0', imagem: '/personagens/seren.svg', bonusIni: 4 }),
-    ],
-    inimigos: [
-      inimigo({
-        nome: 'Ignarax', subtitulo: 'O Dragão das Cinzas', nd: 'ND 9', imagem: '/bosses/dragao.svg',
-        pvMax: 320, defesa: 28, fort: 21, ref: 15, von: 9, tema: 'fogo', tier: 'lendario', revelar: 'oculto', naTela: true, bonusIni: 6,
-        notas: 'Sopro de fogo a cada 1d4 rodadas. Fase 2 com metade dos PV: voa e ganha +2 na Defesa.',
-        imunidades: ['fogo'],
-        ataques: [
-          { nome: 'Mordida', bonus: 27, dano: '2d8+15', tipoDano: 'perfuracao', margem: 19, mult: 2, distancia: false, arquetipo: 'natural' },
-          { nome: 'Garras', bonus: 27, dano: '2d6+15', tipoDano: 'corte', margem: 20, mult: 2, distancia: false, arquetipo: 'natural' },
-        ],
-        habilidades: [
-          { nome: 'Aura de calor', ativa: true },
-          { nome: 'Imune a fogo', ativa: true },
-          { nome: 'Sopro de fogo', ativa: false },
-          { nome: 'Fúria da fênix', ativa: false },
-        ],
-      }),
-      inimigo({ nome: 'Cultista das Cinzas', subtitulo: 'Fanático', nd: 'ND 2', imagem: '/bosses/cultista.svg', pvMax: 28, defesa: 14, fort: 7, ref: 5, von: 9, tema: 'fogo', revelar: 'estado', naTela: true, bonusIni: 1, ataques: [{ nome: 'Adaga ritual', bonus: 10, dano: '1d4+6', tipoDano: 'perfuracao', margem: 19, mult: 2, arquetipo: 'perfuracao' }] }),
-      inimigo({ nome: 'Cultista das Cinzas 2', subtitulo: 'Fanático', nd: 'ND 2', imagem: '/bosses/cultista.svg', pvMax: 28, defesa: 14, fort: 7, ref: 5, von: 9, tema: 'fogo', revelar: 'estado', naTela: true, bonusIni: 1, ataques: [{ nome: 'Adaga ritual', bonus: 10, dano: '1d4+6', tipoDano: 'perfuracao', margem: 19, mult: 2, arquetipo: 'perfuracao' }] }),
-      inimigo({ nome: 'Sentinela Rúnico', subtitulo: 'Construto', nd: 'ND 5', imagem: '/bosses/golem.svg', pvMax: 90, defesa: 22, fort: 17, ref: 5, von: 11, tema: 'arcano', revelar: 'oculto', naTela: false, bonusIni: 0, notas: 'Emboscada: só aparece quando o mestre revelar.' }),
-    ],
+    aliados: [],
+    inimigos: [],
     cena: cenaVazia(),
-    turnos: { ativo: false, rodada: 1, atual: null },
+    turnos: { ativo: false, rodada: 1, atual: null, gasto: gastoNovo() },
     opcoes: { ...OPCOES_PADRAO },
     efeitos: [],
     temporizadores: [],
@@ -190,7 +184,7 @@ export function migrar(bruto: unknown): Estado | null {
     aliados,
     inimigos,
     cena: { ...cenaVazia(), ...(e.cena ?? {}), palco: migrarPalco(e.cena?.palco) },
-    turnos: { ativo: false, rodada: 1, atual: null, ...(e.turnos ?? {}) },
+    turnos: { ativo: false, rodada: 1, atual: null, gasto: gastoNovo(), ...(e.turnos ?? {}) },
     opcoes: { ...OPCOES_PADRAO, ...(e.opcoes ?? {}) },
     efeitos: Array.isArray(e.efeitos) ? e.efeitos : [],
     temporizadores: Array.isArray(e.temporizadores) ? e.temporizadores : [],
@@ -203,9 +197,9 @@ export function carregar(arquivo: string): Estado {
     const e = migrar(JSON.parse(fs.readFileSync(arquivo, 'utf8')));
     if (e) return e;
   } catch {
-    // primeira execucao ou arquivo corrompido: comeca da demonstracao
+    // primeira execucao ou arquivo corrompido: comeca com a mesa vazia
   }
-  return estadoDemo();
+  return estadoVazio();
 }
 
 let timer: NodeJS.Timeout | undefined;
@@ -368,6 +362,7 @@ function moverTurno(estado: Estado, direcao: number) {
     if (t.rodada > 1) { t.rodada -= 1; prox = ordem.length - 1; } else prox = 0;
   }
   t.atual = ordem[prox].ent.id;
+  t.gasto = gastoNovo();
   if (direcao > 0) aoIniciarTurno(estado, t.atual);
 }
 
@@ -681,6 +676,7 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
       t.ativo = true;
       t.rodada = 1;
       t.atual = ordemDeTurno(estado)[0].ent.id;
+      t.gasto = gastoNovo();
       aoIniciarTurno(estado, t.atual);
     } else if (a.acao === 'encerrar') {
       t.ativo = false;
@@ -695,6 +691,10 @@ const ACOES: Record<string, (estado: Estado, a: Acao, eventos: Evento[]) => void
       alvos(estado, a.id);
       t.atual = String(a.id);
       t.ativo = true;
+      t.gasto = gastoNovo();
+    } else if (a.acao === 'liberarAcoes') {
+      // O mestre devolve as acoes de quem esta na vez (engano, poder que da acao extra...).
+      t.gasto = gastoNovo();
     }
   },
 

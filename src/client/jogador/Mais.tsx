@@ -26,7 +26,8 @@ export function Mais({ ficha, codigo, avisar, sair, estado }: PropsAba & { sair:
     const r = await enviarArquivo(`/api/importar-ficha?substituir=${ficha.id}`, f, { 'x-codigo': codigo });
     setEnviando(false);
     if (!r.ok) return avisar(r.erro ?? 'Não consegui atualizar.');
-    avisar('Ficha atualizada!', 'info');
+    const mud = (r.mudancas as string[] | undefined) ?? [];
+    avisar(mud.length ? `Ficha atualizada: ${mud.join(' · ')}` : 'Ficha atualizada (nada mudou).', 'info');
   };
 
   return (
@@ -38,6 +39,7 @@ export function Mais({ ficha, codigo, avisar, sair, estado }: PropsAba & { sair:
         <EditorFicha
           ficha={ficha}
           completo={fichaLivre}
+          cabecalhos={{ 'x-codigo': codigo }}
           fechar={() => setEditando(false)}
           salvar={async (patch) => {
             const r = await postar('/api/jogador/ficha', patch, { 'x-codigo': codigo });

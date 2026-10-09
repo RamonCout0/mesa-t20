@@ -8,7 +8,8 @@ import { pedirBestiario, usePainel } from './contexto.ts';
 import { Botao } from './Botao.tsx';
 import { NOME_REVELAR } from './Card.tsx';
 import { escreverAtaques, lerBlocoAmeaca, lerDefesas, lerLinhasDeAtaque } from '../../shared/bloco-ameaca.ts';
-import { NOME_DANO, type TipoDano } from '../../shared/tipos.ts';
+import { NOME_DANO, type Habilidade, type TipoDano } from '../../shared/tipos.ts';
+import { HabilidadesEditor } from './HabilidadesEditor.tsx';
 
 /** RD, imunidades e vulnerabilidades de volta para texto ("RD 5, redução de fogo 10, imunidade a veneno"). */
 function escreverDefesas(i: Partial<Inimigo>) {
@@ -50,6 +51,7 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
   const dialogo = useRef<HTMLDialogElement>(null);
   const { enviar, avisar } = usePainel();
   const [previa, setPrevia] = useState({ imagem: '', nome: '', cor: '' });
+  const [habs, setHabs] = useState<Habilidade[]>([]);
 
   useEffect(() => {
     const d = dialogo.current;
@@ -62,6 +64,7 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
     if (!alvo) return;
     const e = (alvo.ent ?? alvo.ameaca ?? {}) as Partial<Heroi>;
     setPrevia({ imagem: e.imagem ?? '', nome: e.nome ?? '', cor: e.cor ?? '#e9c46a' });
+    setHabs(((alvo.ent ?? alvo.ameaca) as Partial<Inimigo> | null)?.habilidades ?? []);
   }, [alvo]);
 
   if (!alvo) return <dialog id="editor" ref={dialogo} onClose={fechar} />;
@@ -89,9 +92,7 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
       delete d.defesasTexto;
       delete d.bloco;
       if (!doBestiario) d.naTela = (form.elements.namedItem('naTela') as HTMLInputElement).checked;
-      const antigas = new Map((dados.habilidades ?? []).map((x) => [x.nome, x.ativa]));
-      d.habilidades = String(d.habilidades ?? '').split('\n').map((l) => l.trim()).filter(Boolean)
-        .map((nome) => ({ nome, ativa: antigas.get(nome) ?? false }));
+      d.habilidades = habs.filter((h) => h.nome.trim());
     }
     if (doBestiario) {
       if (await pedirBestiario(avisar, { acao: 'salvar', id: ameaca?.id, dados: d })) fechar();
@@ -116,7 +117,7 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
   );
 
   return (
-    <dialog id="editor" ref={dialogo} onClose={fechar}>
+    <dialog id="editor" ref={dialogo} onClose={fechar} className={heroi ? '' : 'largo'}>
       <form
         method="dialog"
         id="formEditor"
@@ -186,10 +187,12 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
                   ['fort', b.fort], ['ref', b.ref], ['von', b.von], ['bonusIni', b.iniciativa],
                   ['ataquesTexto', escreverAtaques(b.ataques)],
                   ['defesasTexto', escreverDefesas({ rd: b.defesas.rd, imunidades: b.defesas.imunidades, vulnerabilidades: b.defesas.vulnerabilidades })],
-                  ['habilidades', b.habilidades.join('\n')],
                   ['notas', [b.atributos, b.pericias && `Perícias: ${b.pericias}`, b.equipamento && `Equipamento: ${b.equipamento}`].filter(Boolean).join('\n')],
                 ];
                 for (const [n, v] of pares) { const c = campo(n); if (c && v !== '') c.value = String(v); }
+                // Mantem o chip do telao das habilidades que ja existiam com o mesmo nome.
+                const ativas = new Set(habs.filter((h) => h.ativa).map((h) => h.nome.toLowerCase()));
+                setHabs(b.habilidades.map((h) => ({ ...h, ativa: ativas.has(h.nome.toLowerCase()) })));
                 const pv = campo('pv');
                 if (pv) pv.value = String(b.pv);
                 f.dispatchEvent(new Event('input', { bubbles: true }));
@@ -209,9 +212,10 @@ export function Editor({ alvo, imagens, fechar, aoRemover }: Props) {
         )}
         {heroi ? null : <Secao titulo="Mestre" />}
         {heroi ? null : (
-          <Campo rotulo="Efeitos / habilidades do boss (um por linha)">
-            <textarea name="habilidades" defaultValue={(dados.habilidades ?? []).map((x) => x.nome).join('\n')} />
-          </Campo>
+          <div className="campo-habs">
+            <span className="rotulo-habs">Habilidades e magias ({habs.length}) — viram botões na carta; “Telão” mostra o nome para os jogadores</span>
+            <HabilidadesEditor lista={habs} mudar={setHabs} />
+          </div>
         )}
         {heroi ? null : (
           <Campo rotulo="Notas secretas (só você vê)">

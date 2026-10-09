@@ -1,7 +1,9 @@
 // Aba "Acoes": ataques com arma. Escolhe a arma, o alvo e os extras; o servidor rola e resolve.
 import { useState } from 'react';
 import type { Ataque } from '../../shared/tipos.ts';
-import { poderUsavel, type Poder } from '../../shared/ficha.ts';
+import { execucaoDoPoder, poderUsavel, type Poder } from '../../shared/ficha.ts';
+import { faltaAcao, NOME_EXECUCAO } from '../../shared/execucao.ts';
+import { postar } from '../comum/conexao.ts';
 import { CONDICAO_POR_ID } from '../../shared/condicoes.ts';
 import { NOME_DANO } from '../../shared/tipos.ts';
 import { expressaoValida } from '../../shared/rolagem.ts';
@@ -28,12 +30,13 @@ export function Acoes(props: PropsAba) {
   const poderes = [...usaveis('poderes'), ...usaveis('itens')];
   return (
     <main>
-      {props.bloqueio ? <p className="aviso-bloqueio">{props.bloqueio}</p> : null}
+      <PainelTurno {...props} />
+      {props.bloqueio && !props.estado?.turnos.ativo ? <p className="aviso-bloqueio">{props.bloqueio}</p> : null}
       <div className="j-secao"><h3>Ataques</h3><span className="conta">{ficha.ataques.length}</span><span className="deco" /></div>
       {ficha.ataques.length ? (
         <div className="j-lista">
           {ficha.ataques.map((a) => (
-            <button key={a.id} type="button" className="j-item" onClick={() => setArma(a)}>
+            <button key={a.id} type="button" className={`j-item ${props.bloqueioDe('padrao') ? 'travado' : ''}`} onClick={() => setArma(a)}>
               <span className="icone-item">{ICONE_ARMA[a.arquetipo] ?? '⚔️'}</span>
               <span style={{ minWidth: 0 }}><b>{a.nome}</b><small>{descreverAtaque(a)}</small></span>
               <span className="valor-item">{a.bonus >= 0 ? '+' : ''}{a.bonus}</span>
@@ -48,9 +51,9 @@ export function Acoes(props: PropsAba) {
           <div className="j-secao"><h3>Poderes e itens</h3><span className="conta">{poderes.length}</span><span className="deco" /></div>
           <div className="j-lista">
             {poderes.map(({ p, indice, lista }) => (
-              <button key={`${lista}${indice}`} type="button" className={`j-item ${(p.pm ?? 0) > (props.heroi?.pm ?? 0) ? 'sem-pm' : ''}`} onClick={() => setUsando({ lista, indice })}>
+              <button key={`${lista}${indice}`} type="button" className={`j-item ${(p.pm ?? 0) > (props.heroi?.pm ?? 0) ? 'sem-pm' : ''} ${props.bloqueioDe(execucaoDoPoder(p)) ? 'travado' : ''}`} onClick={() => setUsando({ lista, indice })}>
                 <span className="icone-item">{lista === 'itens' ? '🎒' : '⚡'}</span>
-                <span style={{ minWidth: 0 }}><b>{p.nome}</b><small>{resumoPoder(p)}</small></span>
+                <span style={{ minWidth: 0 }}><b>{p.nome}</b><small><i className={`tag-exec ${execucaoDoPoder(p)}`}>{NOME_EXECUCAO[execucaoDoPoder(p)]}</i>{resumoPoder(p)}</small></span>
                 <span className="custo">{p.pm ? `${p.pm} PM` : 'usar'}</span>
               </button>
             ))}
@@ -63,7 +66,8 @@ export function Acoes(props: PropsAba) {
   );
 }
 
-function FolhaAtaque({ arma, fechar, estado, heroi, agir, bloqueio }: PropsAba & { arma: Ataque; fechar: () => void }) {
+function FolhaAtaque({ arma, fechar, estado, heroi, agir, bloqueioDe }: PropsAba & { arma: Ataque; fechar: () => void }) {
+  const bloqueio = bloqueioDe('padrao');
   const [alvos, setAlvos] = useState<string[]>([]);
   const [bonus, setBonus] = useState(0);
   const [extra, setExtra] = useState('');
@@ -110,11 +114,57 @@ function FolhaAtaque({ arma, fechar, estado, heroi, agir, bloqueio }: PropsAba &
 
       <div className="acoes-folha">
         {bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
-        <button type="button" className="j-btn ouro largo rolar-grande" disabled={!alvos.length || enviando || !extraValido || Boolean(bloqueio && !heroi)} onClick={atacar}>
+        <button type="button" className="j-btn ouro largo rolar-grande" disabled={!alvos.length || enviando || !extraValido || Boolean(bloqueio)} onClick={atacar}>
           <Icone nome="espada" />{enviando ? 'Atacando…' : alvos.length ? 'Atacar!' : 'Escolha o alvo'}
         </button>
       </div>
     </Folha>
+  );
+}
+
+/**
+ * Turno do jogador: quais acoes ainda tem (padrao / movimento), mover-se, sacar ou recarregar e passar a vez.
+ * Fora da vez avisa que so reacoes valem.
+ */
+export function PainelTurno({ estado, heroi, codigo, avisar }: PropsAba) {
+  const [enviando, setEnviando] = useState(false);
+  if (!estado?.turnos.ativo || !heroi) return null;
+  const regra = estado.opcoes.acaoSoNaVez;
+  if (estado.turnos.atual !== heroi.id) {
+    const quem = estado.turnos.ordem.find((o) => o.id === estado.turnos.atual)?.nome;
+    return (
+      <div className="turno-j fora">
+        <b>{quem ? `Vez de ${quem}` : 'Aguardando a sua vez'}</b>
+        {regra ? <small>Fora da sua vez você só pode usar reações.</small> : null}
+      </div>
+    );
+  }
+  const g = estado.turnos.gasto ?? { padrao: false, movimento: false };
+  const mandar = async (acao: Record<string, unknown>) => {
+    setEnviando(true);
+    const r = await postar('/api/jogador/acao', acao, { 'x-codigo': codigo });
+    setEnviando(false);
+    if (!r.ok) avisar(r.erro ?? 'Não deu certo.');
+  };
+  const semMovimento = Boolean(faltaAcao(g, 'movimento'));
+  return (
+    <div className="turno-j">
+      {regra ? (
+        <div className="turno-acoes">
+          <span className={g.padrao ? 'gasta' : ''}><Icone nome="espada" />Padrão</span>
+          <span className={g.movimento ? 'gasta' : ''}><Icone nome="proximo" />Movimento</span>
+        </div>
+      ) : <b>Sua vez!</b>}
+      <div className="turno-botoes">
+        {regra ? (
+          <>
+            <button type="button" disabled={enviando || semMovimento} title="Gasta uma ação de movimento" onClick={() => mandar({ tipo: 'gastarAcao', execucao: 'movimento' })}>🏃 Mover-se</button>
+            <button type="button" disabled={enviando || semMovimento} title="Sacar, guardar ou recarregar a arma: ação de movimento" onClick={() => mandar({ tipo: 'gastarAcao', execucao: 'movimento' })}>🔄 Sacar / recarregar</button>
+          </>
+        ) : null}
+        <button type="button" className="passar" disabled={enviando} onClick={() => { if (confirm('Encerrar a sua vez?')) mandar({ tipo: 'passarVez' }); }}>Passar a vez <Icone nome="proximo" /></button>
+      </div>
+    </div>
   );
 }
 
@@ -132,8 +182,9 @@ function resumoPoder(p: Poder) {
 
 const QUEM_DO_ALVO: Record<string, QuemPode> = { inimigo: 'inimigos', inimigos: 'inimigos', aliado: 'aliados', aliados: 'aliados', qualquer: 'todos' };
 
-function FolhaPoder({ lista, indice, fechar, ficha, estado, heroi, agir, bloqueio }: PropsAba & { lista: 'poderes' | 'itens'; indice: number; fechar: () => void }) {
+function FolhaPoder({ lista, indice, fechar, ficha, estado, heroi, agir, bloqueioDe }: PropsAba & { lista: 'poderes' | 'itens'; indice: number; fechar: () => void }) {
   const p = ficha[lista][indice];
+  const bloqueio = p ? bloqueioDe(execucaoDoPoder(p)) : null;
   const [alvos, setAlvos] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   if (!p) return null;
@@ -154,6 +205,7 @@ function FolhaPoder({ lista, indice, fechar, ficha, estado, heroi, agir, bloquei
       <h2>{lista === 'itens' ? '🎒' : '⚡'} {p.nome}</h2>
       <div className="meta">
         {p.pm ? <span className="destaque">{p.pm} PM</span> : null}
+        <span>Ação {NOME_EXECUCAO[execucaoDoPoder(p)].toLowerCase()}</span>
         {resumoPoder(p) !== p.texto.slice(0, 60) ? <span>{resumoPoder(p)}</span> : null}
         {e?.persistente || p.bonus ? <span>Fica ativo {e?.persistente === 'sustentada' ? '(sustentado)' : 'na cena'}</span> : null}
       </div>
@@ -163,7 +215,7 @@ function FolhaPoder({ lista, indice, fechar, ficha, estado, heroi, agir, bloquei
       ) : null}
       <div className="acoes-folha">
         {semPm ? <p className="aviso-bloqueio">PM insuficientes.</p> : bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
-        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || semPm || (precisaAlvo && !alvos.length) || Boolean(bloqueio && !heroi)} onClick={usar}>
+        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || semPm || (precisaAlvo && !alvos.length) || Boolean(bloqueio)} onClick={usar}>
           <Icone nome="raio" />{enviando ? 'Usando…' : precisaAlvo && !alvos.length ? 'Escolha o alvo' : 'Usar'}
         </button>
       </div>

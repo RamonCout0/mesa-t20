@@ -1,6 +1,7 @@
 // Ficha de personagem jogador: o que a mesa guarda de cada heroi (importado do Nimb ou feito a mao).
 import type { Ataque, Atributo, TipoDano } from './tipos.ts';
 import type { Anim, AlvoMagia, Resistencia, Sucesso } from './magias-efeitos.ts';
+import { execucaoDoTexto, type Execucao } from './execucao.ts';
 
 /** As 30 linhas de pericia da ficha (mesma ordem do PDF do Nimb). */
 export const PERICIAS = [
@@ -30,11 +31,16 @@ export interface Poder {
   texto: string;
   /** Custo em PM para usar pelo celular (0 ou vazio = passivo). */
   pm?: number;
+  /** Acao que gasta (vazio = a citada no texto, ou padrao). Reacao pode ser usada fora da vez. */
+  execucao?: Execucao;
   /** O que acontece na mesa ao usar (mesmo formato das magias proprias). */
   efeito?: MagiaPropria['efeito'];
   /** Enquanto ativo (ex.: Furia: +2 em ataque e dano). */
   bonus?: BonusAtivo;
 }
+
+/** Execucao de um poder ou item: a escolhida na ficha ou a citada no texto. */
+export const execucaoDoPoder = (p: Poder): Execucao => p.execucao ?? execucaoDoTexto(p.texto);
 
 /** Poder que aparece para usar no celular (tem custo, efeito ou bonus). */
 export const poderUsavel = (p: Poder) => Boolean(p.pm || p.efeito || (p.bonus && (p.bonus.ataque || p.bonus.dano || p.bonus.defesa)));

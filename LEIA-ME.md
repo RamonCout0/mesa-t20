@@ -60,15 +60,20 @@ jogador, quando ele leva dano e quando chega uma mensagem secreta.
 
 ## No painel do mestre
 
-- **Combate:** cada inimigo tem os ataques dele em botões — clique no ataque e depois no alvo e o
-  motor resolve. **Habilidade** serve para sopros, explosões e afins (dano, teste, CD, condição, vários alvos).
+- **Combate:** cada inimigo tem os ataques e as **habilidades** dele em botões — clique e depois no alvo e o
+  motor resolve (dano, teste e CD, condição, PM gasto). Ao selecionar, a descrição do livro aparece embaixo;
+  habilidades só de texto (📜) apenas anunciam no telão. **Avulsa** serve para algo que não está na ficha.
   Heróis sem celular também podem agir pelo card. Dano/cura manual continua lá (`Enter` = dano,
   `Shift+Enter` = cura; clique nas fotos para selecionar vários).
 - **Inimigos:** o PV fica **escondido por padrão** (menu de cada um: nada, estado, barra ou número).
   O **olho** mostra/esconde no telão; **Invocar** põe o boss no centro com clarão e tremor.
 - **Turnos:** iniciativa (ou **Rolar iniciativa**, ou **Pedir teste → Iniciativa** para cada um rolar no
   celular), **Iniciar combate**, **Próximo ▶** (tecla `N`).
-  Com *Em combate, cada um só age na sua vez* ligado (aba Jogadores), o celular espera a vez.
+  Com *Em combate, cada um só age na sua vez* ligado (aba Jogadores, ligado por padrão): fora da vez o
+  celular só usa **reações** (magia ou poder marcado como Reação); na vez, conta **ação padrão + movimento**
+  (atacar e a maioria das magias gastam a padrão; ação completa gasta as duas; dá para trocar a padrão por
+  um segundo movimento). O celular tem **Mover-se**, **Sacar / recarregar** e **Passar a vez**. No topo do
+  painel, **P M** mostra o que o herói da vez já gastou — clique para devolver as ações.
 
 ## Bestiário
 
@@ -79,6 +84,9 @@ Aba **Bestiário**: suas fichas de inimigos guardadas, prontas para virar carta.
   computador, em `data/bestiario/`. Confira as que vierem sem ND. Também dá pela linha de comando:
   `npm run bestiario -- "caminho/Ameaças de Arton.pdf"`.
 - **Nova ameaça:** cole o bloco de estatísticas do livro e clique em *Preencher a ficha*.
+- **Habilidades e magias:** o leitor do livro pega todas (inclusive as magias da lista com •), com descrição,
+  execução, PM, dano, teste e CD. No lápis, cada uma abre para ajustar o que ele não entendeu, criar novas
+  ou marcar **Telão** (o nome aparece para os jogadores). *Ler mecânica da descrição* preenche sozinho.
 - **Guardar no bestiário:** no lápis de um inimigo da mesa.
 - **Pôr na mesa:** escolha a quantidade e clique; com mais de um, eles são numerados (*Orc 1, Orc 2…*).
 - **Chefe final** (Ameaças de Arton, p. 370): ligue a coroa antes de pôr na mesa, ou use *Tornar chefe final*
@@ -118,7 +126,20 @@ funcionam como as do livro), poderes, regras da casa, itens mágicos e notas. Po
 mesa* ganham custo em PM, efeito e bônus enquanto ativos. **Ficha em branco** cria um personagem sem o Nimb
 (no celular também: *Criar personagem do zero*). Com *Jogadores editam a própria
 ficha* ligado, cada um também edita pelo celular (aba **Mais**); desligado, eles só mexem nas anotações.
-Reimportar o PDF do Nimb mantém as magias próprias e os itens criados aqui.
+**Calcular pela regra do livro** (aba Atributos) monta PV, PM, Defesa e as perícias pela classe, nível,
+armadura e escudo — bom para criar do zero (até nível 20) ou subir de nível.
+
+**Subiu de nível no Nimb?** Exporte o PDF de novo e importe: se já existe ficha com o mesmo nome, ela é
+**atualizada** (não duplica), mantendo QR/código, foto, cor, dado, notas, magias próprias, itens e os ajustes
+dos poderes. O aviso mostra o que mudou (nível, PV, arma nova, magia nova). No celular: *Mais → Atualizar
+ficha (novo PDF do Nimb)*.
+
+**Biblioteca da casa:** no editor, o mestre usa o 📖 de um item, poder ou magia própria para guardar na
+biblioteca (`data/casa.json`); em qualquer ficha, *Da biblioteca da casa…* põe uma cópia. Bom para itens,
+acessórios, poderes e regras da casa que vários personagens usam. Vai junto no backup.
+
+**Execução de poderes:** cada poder/item usável tem *Execução* (padrão, movimento, completa, livre, reação).
+Vazio usa a que o texto cita (“Como uma reação…”). Marque como **Reação** o que pode ser usado fora da vez.
 
 ## Backup
 

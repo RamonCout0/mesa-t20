@@ -111,3 +111,24 @@
 .ed-mais.pequeno { height: 34px; font-size: 12px; }
 .ed-uso { display: grid; gap: 10px; padding: 10px; border-radius: 12px; background: rgba(232, 195, 122, 0.05); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.2); }
 @media (max-width: 640px) { .ed-aprim { grid-template-columns: 56px minmax(0, 1fr) 48px auto; } .ed-aprim input:nth-child(3) { grid-column: 1 / 3; } }
+
+/* Calculo pela regra do livro (aba Atributos). */
+.ed-regra { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(232, 195, 122, 0.06); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.28); }
+.ed-regra[open] { gap: 12px; }
+.ed-regra summary { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 700; color: var(--ouro); }
+.ed-regra summary .ico { width: 17px; height: 17px; }
+.ed-regra-res { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 12px; border-radius: 12px; background: rgba(8, 5, 12, 0.55); color: var(--suave); font-size: 13px; }
+.ed-regra-res b { color: var(--texto); font: 700 18px var(--fonte-num); margin-left: 4px; }
+.ed-regra-res .ed-btn { margin-left: auto; }
+
+/* Biblioteca da casa: guardar e pôr itens, poderes e magias em outras fichas. */
+.ed-casa {
+  display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 10px; border: 0; border-radius: 9px; cursor: pointer;
+  background: rgba(232, 195, 122, 0.12); color: var(--ouro-claro); font: 600 12px var(--fonte);
+}
+.ed-casa .ico { width: 15px; height: 15px; }
+.ed-da-casa {
+  flex: 1; min-width: 180px; height: 38px !important; border-color: rgba(232, 195, 122, 0.45) !important;
+  background: rgba(232, 195, 122, 0.08) !important; color: var(--ouro-claro) !important;
+}
+.ed-aviso[onclick], .ed-aviso { cursor: default; }

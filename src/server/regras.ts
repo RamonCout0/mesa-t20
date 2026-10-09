@@ -9,9 +9,9 @@ import { randomInt } from 'node:crypto';
 import type { Estado, Entidade, Heroi, Inimigo, Lado, Ataque, TipoDano } from '../shared/tipos.ts';
 import { NOME_DANO } from '../shared/tipos.ts';
 import type { Ficha } from '../shared/ficha.ts';
-import { CUSTO_CIRCULO, cdMagia, limitePm, poderUsavel } from '../shared/ficha.ts';
+import { CUSTO_CIRCULO, cdMagia, execucaoDoPoder, limitePm, poderUsavel } from '../shared/ficha.ts';
 import type { Magia } from '../shared/magias.ts';
-import type { EfeitoMagia, Resistencia, Uso } from '../shared/magias-efeitos.ts';
+import type { Anim, EfeitoMagia, Resistencia, Uso } from '../shared/magias-efeitos.ts';
 import { acharMagia, efeitoNaFicha, fichaConhece } from '../shared/magias-proprias.ts';
 import {
   rolar, multiplicarDados, somarExpressao, maisDadosIguais, lerExpressao, type Sorteio, type Rolada,
@@ -21,6 +21,7 @@ import type {
   AlvoResultado, Autor, EfeitoAtivo, ParteDano, ResultadoAcao, RolagemExibida, Temporizador,
 } from '../shared/acoes.ts';
 import { CONDICAO_POR_ID } from '../shared/condicoes.ts';
+import { faltaAcao, gastar, lerExecucao, NOME_EXECUCAO, type Execucao } from '../shared/execucao.ts';
 import { novoId, buscar, tirarEfeitos } from './estado.ts';
 
 export const sorteioSeguro: Sorteio = (faces) => randomInt(1, faces + 1);
@@ -177,9 +178,30 @@ const exibir = (rotulo: string, r: Rolada, alvoId?: string): RolagemExibida => (
   rotulo, expressao: r.expressao, dados: r.dados, bonus: r.bonus, total: r.total, ...(alvoId ? { alvoId } : {}),
 });
 
-function checarVez(estado: Estado, autorId: string, ehJogador: boolean) {
-  if (!ehJogador || !estado.opcoes.acaoSoNaVez || !estado.turnos.ativo) return;
-  if (estado.turnos.atual !== autorId) throw new Error('Espere a sua vez na iniciativa.');
+/**
+ * Com combate em andamento e a regra ligada: fora da vez o jogador so usa reacoes; na vez, cada acao
+ * gasta padrao/movimento. Devolve a funcao que marca o gasto (chamada so quando a acao deu certo).
+ */
+function checarVez(estado: Estado, autorId: string, ehJogador: boolean, execucao: Execucao): () => void {
+  const nada = () => {};
+  if (!ehJogador || !estado.opcoes.acaoSoNaVez || !estado.turnos.ativo || execucao === 'reacao') return nada;
+  if (estado.turnos.atual !== autorId) {
+    throw new Error(execucao === 'livre'
+      ? 'Ação livre só na sua vez. Fora dela, só reações.'
+      : `Não é a sua vez. Fora dela só dá para usar reações (isto é ação ${NOME_EXECUCAO[execucao].toLowerCase()}).`);
+  }
+  const falta = faltaAcao(estado.turnos.gasto, execucao);
+  if (falta) throw new Error(falta);
+  return () => gastar(estado.turnos.gasto, execucao);
+}
+
+/** O jogador gasta uma acao sem rolar nada (mover-se, sacar ou recarregar a arma, levantar...). */
+export function gastarAcaoAvulsa(estado: Estado, autorId: string, execucao: Execucao) {
+  if (!estado.turnos.ativo) throw new Error('Sem combate em andamento: ande à vontade.');
+  if (estado.turnos.atual !== autorId) throw new Error('Não é a sua vez.');
+  const falta = faltaAcao(estado.turnos.gasto, execucao);
+  if (falta) throw new Error(falta);
+  gastar(estado.turnos.gasto, execucao);
 }
 
 function exigirAcordado(ent: Entidade) {
@@ -219,10 +241,13 @@ export function resolverAtaque(ctx: Contexto, autorId: string, ataque: Ataque, a
   const { estado } = ctx;
   const sorteio = ctx.sorteio ?? sorteioSeguro;
   const autor = exigir(estado, autorId);
-  checarVez(estado, autorId, ehJogador);
+  // Agredir e acao padrao (Tormenta20, p. 234).
+  const gastarVez = checarVez(estado, autorId, ehJogador, 'padrao');
   exigirAcordado(autor.ent);
   const alvo = exigir(estado, alvoId);
   if (alvo.ent.id === autor.ent.id) throw new Error('Escolha outro alvo.');
+  // Inimigo escondido do telao nao pode ser atacado pelo celular (nem pelo id).
+  if (ehJogador && alvo.lado === 'inimigos' && !(alvo.ent as Inimigo).naTela && estado.cena.bossId !== alvo.ent.id) throw new Error('Alvo inválido.');
 
   const distancia = ataque.distancia || Boolean(extras.arremessar && ataque.arremessavel);
   const bonusSituacao = Math.max(-20, Math.min(20, Math.trunc(extras.bonus ?? 0)));
@@ -259,6 +284,7 @@ export function resolverAtaque(ctx: Contexto, autorId: string, ataque: Ataque, a
   alvoRes.pvDepois = alvo.ent.pv;
 
   const desc = critico ? 'CRÍTICO' : acertou ? 'acerta' : 'erra';
+  gastarVez();
   const texto = `${autor.ent.nome} ataca ${alvo.ent.nome} com ${ataque.nome}: ${total} contra Defesa ${defesa}, ${desc}${acertou ? ` (${alvoRes.dano} de dano${alvoRes.reduzido ? `, ${alvoRes.reduzido} reduzidos` : ''})` : ''}.`;
   return {
     id: novoId(), criadoEm: Date.now(), tipo: 'ataque', autor: autorDe(autor), titulo: ataque.nome,
@@ -446,12 +472,12 @@ export function resolverMagia(ctx: Contexto, heroiId: string, pedido: PedidoMagi
   const { estado } = ctx;
   const autor = exigir(estado, heroiId);
   if (autor.lado !== 'aliados') throw new Error('Só heróis lançam magias do grimório.');
-  checarVez(estado, heroiId, ehJogador);
-  exigirAcordado(autor.ent);
   const heroi = autor.ent as Heroi;
   const ficha = ctx.fichaDe(heroi);
   const m = acharMagia(ficha, pedido.magiaId);
   if (!m) throw new Error('Magia desconhecida.');
+  const gastarVez = checarVez(estado, heroiId, ehJogador, lerExecucao(m.execucao));
+  exigirAcordado(autor.ent);
   if (ehJogador && ficha && !fichaConhece(ficha, m.id)) throw new Error('Essa magia não está na sua ficha.');
 
   const escolhidos = lerAprimoramentos(m, pedido.aprimoramentos ?? {});
@@ -466,6 +492,7 @@ export function resolverMagia(ctx: Contexto, heroiId: string, pedido: PedidoMagi
   const alvos = validarAlvos(estado, efeito, autor, pedido.alvos, ehJogador);
   const cd = ficha ? cdMagia(ficha) : 10 + Math.floor(heroi.nivel / 2);
   heroi.pm -= custo;
+  gastarVez();
 
   const rolagens: RolagemExibida[] = [];
   const resultados = aplicarEfeito(ctx, autor, efeito, alvos, cd, rolagens);
@@ -514,9 +541,10 @@ export function resolverUso(ctx: Contexto, autorId: string, efeitoId: string, in
   const m = acharMagia(ficha, ativo.magiaId);
   const uso: Uso | undefined = m ? efeitoNaFicha(ficha, m).usos?.[indice] : undefined;
   if (!m || !uso) throw new Error('Esse efeito não tem esse uso.');
-  checarVez(estado, autor.ent.id, ehJogador);
+  const gastarVez = checarVez(estado, autor.ent.id, ehJogador, lerExecucao(uso.nome));
   const cd = ficha ? cdMagia(ficha) : 10 + Math.floor(((autor.ent as Heroi).nivel ?? 1) / 2);
   const alvos = validarAlvos(estado, { alvo: uso.alvo, maxAlvos: uso.maxAlvos ?? 0 }, autor, alvoIds, ehJogador);
+  gastarVez();
   const rolagens: RolagemExibida[] = [];
   const resultados = aplicarEfeito(ctx, autor, { ...uso, maxAlvos: uso.maxAlvos ?? 0 }, alvos, cd, rolagens);
   const autoCura = drenar(uso, autor, resultados);
@@ -535,29 +563,53 @@ export interface PedidoHabilidade {
   nome: string;
   dano?: string;
   tipoDano?: TipoDano | '';
+  cura?: string;
   res?: Resistencia | '';
   cd?: number;
   sucesso?: 'metade' | 'anula';
   condicoes?: string[];
+  /** PM que o inimigo gasta. */
+  pm?: number;
+  /** 'nenhum' = so anuncia no telao; 'si' = o proprio inimigo (cura, protecao). */
+  alvo?: 'inimigos' | 'um' | 'si' | 'aliados' | 'nenhum';
+  /** Descricao, vai para a nota do registro (so o mestre ve). */
+  texto?: string;
 }
 
-/** O mestre usa uma habilidade de inimigo com teste de resistencia (sopro, grito, veneno...). */
+// Cor da animacao pelo tipo de dano da habilidade.
+const ELEMENTO_DO_DANO: Partial<Record<TipoDano, Anim['elemento']>> = {
+  fogo: 'fogo', frio: 'frio', eletricidade: 'eletricidade', acido: 'acido', luz: 'luz', trevas: 'trevas',
+  psiquico: 'psiquico', essencia: 'arcano', impacto: 'terra', corte: 'metal', perfuracao: 'metal',
+};
+
+/** O mestre usa uma habilidade de inimigo (sopro, grito, veneno, magia do bloco, aura...). */
 export function resolverHabilidade(ctx: Contexto, autorId: string, p: PedidoHabilidade, alvoIds: string[]): ResultadoAcao {
   const autor = exigir(ctx.estado, autorId);
-  const alvos = validarAlvos(ctx.estado, { alvo: 'inimigos', maxAlvos: 0 }, autor, alvoIds, false);
+  const pm = Math.max(0, Math.trunc(p.pm ?? 0));
+  if (pm && autor.ent.pmMax && pm > autor.ent.pm) throw new Error(`${autor.ent.nome} tem só ${autor.ent.pm} PM (precisa de ${pm}).`);
+  const alvoTipo = p.alvo ?? 'inimigos';
+  const alvos = alvoTipo === 'nenhum' ? []
+    : alvoTipo === 'si' ? [autor]
+      : validarAlvos(ctx.estado, { alvo: 'inimigos', maxAlvos: alvoTipo === 'um' ? 1 : 0 }, autor, alvoIds, false);
   if (p.dano) lerExpressao(p.dano);
+  if (p.cura) lerExpressao(p.cura);
+  const elemento = (p.tipoDano && ELEMENTO_DO_DANO[p.tipoDano]) || (p.cura ? 'luz' : 'trevas');
   const efeito: EfeitoParaAplicar = {
     alvo: 'inimigos', maxAlvos: 0, ...(p.dano ? { dano: p.dano } : {}), ...(p.tipoDano ? { tipoDano: p.tipoDano } : {}),
+    ...(p.cura ? { cura: p.cura } : {}),
     ...(p.res ? { res: p.res, sucesso: p.sucesso ?? 'metade' } : {}), falhou: p.condicoes ?? [],
-    anim: { tipo: 'onda', elemento: p.tipoDano === 'fogo' ? 'fogo' : p.tipoDano === 'frio' ? 'frio' : 'trevas' },
+    anim: { tipo: p.cura && !p.dano ? 'cura' : alvoTipo === 'nenhum' || alvoTipo === 'si' ? 'aura' : 'onda', elemento },
   };
+  if (pm && autor.ent.pmMax) autor.ent.pm -= pm;
   const rolagens: RolagemExibida[] = [];
-  const resultados = aplicarEfeito(ctx, autor, efeito, alvos, p.res ? (p.cd ?? 15) : null, rolagens);
+  const resultados = alvos.length ? aplicarEfeito(ctx, autor, efeito, alvos, p.res ? (p.cd ?? 15) : null, rolagens) : [];
+  const nome = p.nome || 'uma habilidade';
   return {
     id: novoId(), criadoEm: Date.now(), tipo: 'magia', autor: autorDe(autor), titulo: p.nome || 'Habilidade',
-    subtitulo: [p.dano, p.res ? `${NOME_TESTE[p.res]} CD ${p.cd ?? 15}` : ''].filter(Boolean).join(' · '),
-    dado: dadoDe(ctx, autor), rolagens, alvos: resultados, anim: { magia: efeito.anim },
-    texto: textoMagia(autor, p.nome || 'uma habilidade', resultados, undefined),
+    subtitulo: [pm ? `${pm} PM` : '', p.dano, p.cura ? `cura ${p.cura}` : '', p.res ? `${NOME_TESTE[p.res]} CD ${p.cd ?? 15}` : ''].filter(Boolean).join(' · '),
+    dado: dadoDe(ctx, autor), rolagens, alvos: resultados, anim: { magia: efeito.anim }, ...(pm ? { pmGasto: pm } : {}),
+    texto: alvos.length ? textoMagia(autor, nome, resultados, pm || undefined) : `${autor.ent.nome} usa ${nome}${pm ? ` (${pm} PM)` : ''}.`,
+    ...(p.texto ? { nota: p.texto.slice(0, 600) } : {}),
   };
 }
 
@@ -584,12 +636,12 @@ export function resolverPoder(ctx: Contexto, heroiId: string, indice: number, al
   const { estado } = ctx;
   const autor = exigir(estado, heroiId);
   if (autor.lado !== 'aliados') throw new Error('Só heróis usam poderes da ficha.');
-  checarVez(estado, heroiId, ehJogador);
-  exigirAcordado(autor.ent);
   const heroi = autor.ent as Heroi;
   const ficha = ctx.fichaDe(heroi);
   const p = ficha?.[lista]?.[indice];
   if (!ficha || !p || !poderUsavel(p)) throw new Error(lista === 'itens' ? 'Item não encontrado na ficha.' : 'Poder não encontrado na ficha.');
+  const gastarVez = checarVez(estado, heroiId, ehJogador, execucaoDoPoder(p));
+  exigirAcordado(autor.ent);
   const alquebrado = p.pm && heroi.condicoes.includes('alquebrado') ? 1 : 0;
   const custo = (p.pm ?? 0) + alquebrado;
   if ((p.pm ?? 0) > limitePm(ficha)) throw new Error(`Você pode gastar no máximo ${limitePm(ficha)} PM numa habilidade (seu nível).`);
@@ -599,6 +651,7 @@ export function resolverPoder(ctx: Contexto, heroiId: string, indice: number, al
   const alvos = validarAlvos(estado, efeito, autor, alvoIds, ehJogador);
   const cd = cdMagia(ficha) ?? 10 + Math.floor(ficha.nivel / 2) + Math.max(...Object.values(ficha.atributos));
   heroi.pm -= custo;
+  gastarVez();
   const rolagens: RolagemExibida[] = [];
   const resultados = aplicarEfeito(ctx, autor, { ...efeito, sucesso: efeito.res ? efeito.sucesso ?? 'metade' : undefined }, alvos, cd, rolagens);
 
@@ -719,5 +772,7 @@ export function resultadoPublico(estado: Estado, r: ResultadoAcao): ResultadoAca
   const rolagens = r.rolagens
     .filter((x) => !x.alvoId || !ocultos.has(x.alvoId))
     .map((x) => (x.alvoId && estado.inimigos.some((i) => i.id === x.alvoId) ? { ...x, total: x.dados[0]?.valor ?? x.total, bonus: 0 } : x));
-  return { ...r, alvos, rolagens };
+  // Descricao e PM gasto de habilidade de inimigo ficam so com o mestre.
+  const doInimigo = r.autor.lado === 'inimigos' ? { nota: undefined, pmGasto: undefined } : {};
+  return { ...r, alvos, rolagens, ...doInimigo };
 }

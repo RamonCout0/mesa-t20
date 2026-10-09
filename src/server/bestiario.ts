@@ -5,6 +5,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { CAMPOS_AMEACA, type Ameaca, type Estado, type Inimigo } from '../shared/tipos.ts';
 import { criar, novoId, num, tornarChefeFinal, txt } from './estado.ts';
+import { lerBlocoAmeaca } from '../shared/bloco-ameaca.ts';
 
 export class Bestiario {
   private readonly dir: string;
@@ -24,7 +25,9 @@ export class Bestiario {
     for (const arq of fs.readdirSync(this.dir).filter((a) => a.endsWith('.json'))) {
       try {
         const a = JSON.parse(fs.readFileSync(path.join(this.dir, arq), 'utf8')) as Ameaca;
-        if (a?.id && a.nome) this.todas.set(a.id, a);
+        if (!a?.id || !a.nome) continue;
+        if (atualizarHabilidades(a)) fs.writeFileSync(path.join(this.dir, arq), JSON.stringify(a, null, 2));
+        this.todas.set(a.id, a);
       } catch {
         console.warn(`Ameaça ilegível ignorada: data/bestiario/${arq}`);
       }
@@ -53,9 +56,10 @@ export class Bestiario {
     const a = {
       ...Object.fromEntries(CAMPOS_AMEACA.map((c) => [c, ent[c]])),
       id: atual?.id ?? idNovo ?? novoId(),
-      texto: txt(dados.texto ?? atual?.texto, 6000),
+      texto: txt(dados.texto ?? atual?.texto, 20000),
       criadaEm: atual?.criadaEm ?? agora,
       atualizadaEm: agora,
+      versao: 3,
     } as Ameaca;
     this.todas.set(a.id, a);
     fs.writeFileSync(path.join(this.dir, `${a.id}.json`), JSON.stringify(a, null, 2));
@@ -105,6 +109,23 @@ export class Bestiario {
     fs.renameSync(path.join(this.dir, `${id}.json`), path.join(this.lixeira, `${id}-${Date.now()}.json`));
     this.todas.delete(id);
   }
+}
+
+/**
+ * Fichas antigas so guardavam o nome de ate duas ou tres habilidades. Rele o bloco do livro e traz
+ * todas, com texto, execucao, PM, dano e teste. Mantem as que o mestre criou e os chips ativos.
+ */
+function atualizarHabilidades(a: Ameaca) {
+  if ((a.versao ?? 0) >= 3) return false;
+  a.versao = 3;
+  const bloco = a.texto ? lerBlocoAmeaca(a.texto) : null;
+  if (!bloco) return true;
+  const antigas = new Map((a.habilidades ?? []).map((h) => [h.nome.toLowerCase(), h]));
+  const lidas = bloco.habilidades.map((h) => ({ ...h, ativa: antigas.get(h.nome.toLowerCase())?.ativa ?? false }));
+  const nomes = new Set(lidas.map((h) => h.nome.toLowerCase()));
+  const doMestre = (a.habilidades ?? []).filter((h) => !nomes.has(h.nome.toLowerCase()) && (h.texto || h.ativa));
+  a.habilidades = (criar('inimigos', { habilidades: [...lidas, ...doMestre] }) as Inimigo).habilidades;
+  return true;
 }
 
 /** Uma carta de inimigo da ficha de ameaca. Com mais de uma, numera: "Cultista 1", "Cultista 2"... */

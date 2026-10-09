@@ -5,6 +5,7 @@ import type { Desfecho } from '../../shared/acoes.ts';
 import type { ArquetipoArma } from '../../shared/tipos.ts';
 import { MotorFx, arco, angulo, distancia, ease, lerp, sorte, type Ponto } from './motor.ts';
 import { ARCO_IRIS, PALETAS, type Paleta } from './paletas.ts';
+import { ASSINATURA_FORTE, assinatura, linhasDeImpacto, rastro } from './assinaturas.ts';
 
 export interface AlvoFx {
   p: Ponto;
@@ -71,8 +72,10 @@ function impacto(m: MotorFx, p: Ponto, a: Anim, desfecho: Desfecho, escala = 1) 
     return;
   }
   m.pulso(p, pl.cor, 130 * k, 320);
-  m.anel(p, pl.faisca, 150 * k, 520, 9 * k);
-  const n = Math.round(46 * k);
+  if (!ASSINATURA_FORTE.has(a.elemento) || desfecho === 'critico') m.anel(p, pl.faisca, 150 * k, 520, 9 * k);
+  // Cada elemento tem seu desenho proprio; as faiscas genericas so completam.
+  assinatura(m, p, a.elemento, k / m.escala);
+  const n = Math.round((ASSINATURA_FORTE.has(a.elemento) ? 16 : 40) * k);
   m.emitir(n, () => {
     const ang = sorte(0, Math.PI * 2);
     const v = sorte(180, 640) * k;
@@ -88,6 +91,7 @@ function impacto(m: MotorFx, p: Ponto, a: Anim, desfecho: Desfecho, escala = 1) 
     }));
   }
   if (desfecho === 'critico') {
+    linhasDeImpacto(m, p, pl.nucleo, 70 * k);
     m.clarao(pl.nucleo, 260, 0.55);
     m.tremer(16, 520);
     m.emitir(10, (i) => ({ x: p.x, y: p.y, vx: Math.cos(i * 0.628) * 520, vy: Math.sin(i * 0.628) * 520, arrasto: 4, max: 0.5, tam: 22 * k, cor: pl.faisca, forma: 'estrela', vrot: 6 }));
@@ -116,6 +120,7 @@ async function projetil(m: MotorFx, de: Ponto, para: Ponto, a: Anim, opcoes: { m
       m.particula({ x: q.x + sorte(-4, 4), y: q.y + sorte(-4, 4), vx: sorte(-30, 30), vy: sorte(-30, 30), max: sorte(0.25, 0.55), tam: tam * sorte(0.35, 0.7), cor: corDe(a, pl) });
     }
     if (pl.fumaca && Math.random() < 0.4) m.particula({ x: p.x, y: p.y, vy: -30, max: 0.8, tam: tam * 0.8, tamFim: tam * 2, cor: pl.fumaca, forma: 'fumaca', aditivo: false, alfa: 0.6 });
+    rastro(m, p, a.elemento, tam);
     anterior = p;
     // Cabeca do projetil
     const ang = angulo(arco(de, para, altura, Math.max(0, e - 0.02)), p);
@@ -615,47 +620,85 @@ export async function tocarMagia(cena: CenaFx, anim: Anim) {
 
 // ---------------- armas ----------------
 
-/** Arco de corte (golpe de espada/machado) sobre o alvo. */
+/** Arco de corte (golpe de espada/machado): meia-lua que afina nas pontas, com rastro de faiscas. */
 function corte(m: MotorFx, p: Ponto, raio: number, pl: Paleta, critico: boolean, errou = false) {
   const inicio = sorte(-2.6, -1.9);
-  const giro = critico ? 3.4 : 2.3;
+  const giro = critico ? 3.4 : 2.4;
   const r = raio * (critico ? 1.35 : 1.05);
   const centro = errou ? { x: p.x + raio * 1.3, y: p.y - raio * 0.3 } : p;
+  const segmentos = 28;
   for (let k = 0; k < (critico ? 2 : 1); k += 1) {
     const deslocado = k ? 0.9 : 0;
-    m.desenhar(380, (c, t) => {
+    const espelho = k ? -1 : 1;
+    m.desenhar(560, (c, t) => {
       const a0 = inicio + deslocado;
-      const a1 = a0 + giro * ease.saida(t);
-      const caudaInicio = Math.max(a0, a1 - 1.3);
-      c.globalAlpha = (1 - t) ** 0.6;
+      const a1 = a0 + giro * ease.saida(Math.min(1, t * 1.4));
+      const cauda = Math.max(a0, a1 - 1.6);
+      c.globalAlpha = (1 - t) ** 0.7;
       c.lineCap = 'round';
-      for (const [cor, larg, blur] of [[pl.brilho, 22, 30], [pl.cor, 11, 16], [pl.nucleo, 4, 6]] as const) {
+      for (const [cor, larg, blur] of [[pl.brilho, 14, 22], [pl.cor, 7, 10], [pl.nucleo, 2.5, 3]] as const) {
         c.strokeStyle = cor;
-        c.lineWidth = larg * m.escala * (critico ? 1.4 : 1);
         c.shadowColor = cor;
         c.shadowBlur = blur;
-        c.beginPath();
-        c.arc(centro.x, centro.y, r, caudaInicio, a1);
-        c.stroke();
+        for (let i = 0; i < segmentos; i += 1) {
+          const u0 = i / segmentos;
+          const u1 = (i + 1) / segmentos;
+          // Grossura: fina na cauda, cheia perto da ponta, fina de novo na ponta.
+          const w = Math.sin(Math.PI * (u0 * 0.85 + 0.1)) ** 1.5;
+          c.lineWidth = Math.max(0.5, larg * w * m.escala * (critico ? 1.4 : 1));
+          c.beginPath();
+          c.arc(centro.x, centro.y, r, espelho > 0 ? lerp(cauda, a1, u0) : -lerp(cauda, a1, u0) + Math.PI, espelho > 0 ? lerp(cauda, a1, u1) : -lerp(cauda, a1, u1) + Math.PI, espelho < 0);
+          c.stroke();
+        }
       }
       c.shadowBlur = 0;
     });
   }
+  if (!errou) {
+    // Faiscas saindo pela tangente do golpe.
+    m.emitir(critico ? 26 : 14, () => {
+      const a = inicio + giro * sorte(0.4, 1);
+      const q = { x: centro.x + Math.cos(a) * r, y: centro.y + Math.sin(a) * r };
+      const tg = a + Math.PI / 2;
+      const v = sorte(250, 600);
+      return { x: q.x, y: q.y, vx: Math.cos(tg) * v, vy: Math.sin(tg) * v, ay: 900, arrasto: 1.5, max: sorte(0.3, 0.6), tam: sorte(2, 4) * m.escala, cor: pl.faisca, forma: 'faisca' };
+    });
+  }
 }
 
-/** Estocada (perfuracao): risco reto rapido atravessando o alvo. */
+/** Estocada (perfuracao): risco reto atravessando o alvo e uma rajada que sai do outro lado. */
 function estocada(m: MotorFx, de: Ponto, p: Ponto, pl: Paleta, critico: boolean) {
   const ang = angulo(de, p);
-  const comp = 220 * m.escala * (critico ? 1.5 : 1);
+  const comp = 240 * m.escala * (critico ? 1.5 : 1);
   const ini = { x: p.x - Math.cos(ang) * comp, y: p.y - Math.sin(ang) * comp };
-  const fim = { x: p.x + Math.cos(ang) * comp * 0.35, y: p.y + Math.sin(ang) * comp * 0.35 };
-  feixe(m, ini, fim, { tipo: 'raio', elemento: 'metal' }, 260, false, critico ? 14 : 9);
-  m.pulso(p, pl.nucleo, 60 * m.escala, 240);
+  const fim = { x: p.x + Math.cos(ang) * comp * 0.6, y: p.y + Math.sin(ang) * comp * 0.6 };
+  feixe(m, ini, fim, { tipo: 'raio', elemento: 'metal' }, 320, false, critico ? 12 : 7);
+  m.pulso(p, pl.nucleo, 70 * m.escala, 260);
+  // Brilho fino em cruz no ponto perfurado e faiscas saindo pelas costas do alvo.
+  m.desenhar(380, (c, t) => {
+    c.globalAlpha = (1 - t) ** 1.5;
+    c.strokeStyle = '#ffffff';
+    c.shadowColor = pl.cor;
+    c.shadowBlur = 20;
+    c.lineWidth = 2 * m.escala;
+    const h = 120 * m.escala * (1 - t * 0.5);
+    c.beginPath();
+    c.moveTo(p.x - Math.sin(ang) * h, p.y + Math.cos(ang) * h);
+    c.lineTo(p.x + Math.sin(ang) * h, p.y - Math.cos(ang) * h);
+    c.stroke();
+    c.shadowBlur = 0;
+  });
+  m.emitir(critico ? 30 : 18, () => {
+    const a = ang + sorte(-0.35, 0.35);
+    const v = sorte(380, 900);
+    return { x: p.x, y: p.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, arrasto: 2.5, ay: 300, max: sorte(0.25, 0.5), tam: sorte(2, 4) * m.escala, cor: Math.random() < 0.5 ? pl.faisca : '#ffffff', forma: 'faisca' };
+  });
 }
 
-/** Pancada (impacto): onda curta e destrocos. */
+/** Pancada (impacto): onda de choque achatada, chao rachado, poeira e destrocos. */
 function pancada(m: MotorFx, p: Ponto, pl: Paleta, critico: boolean) {
   m.anel(p, pl.nucleo, 120 * m.escala * (critico ? 1.6 : 1), 360, 16);
+  assinatura(m, p, 'terra', critico ? 1.2 : 0.8);
   m.emitir(critico ? 30 : 16, () => ({ x: p.x, y: p.y, vx: sorte(-420, 420), vy: sorte(-480, -60), ay: 900, max: sorte(0.5, 0.9), tam: sorte(5, 11) * m.escala, cor: '#cdb79a', forma: 'estilhaco', vrot: sorte(-10, 10), aditivo: false }));
 }
 
@@ -663,11 +706,11 @@ function pancada(m: MotorFx, p: Ponto, pl: Paleta, critico: boolean) {
 function garras(m: MotorFx, p: Ponto, raio: number, pl: Paleta, critico: boolean) {
   for (let i = 0; i < 3; i += 1) {
     const dx = (i - 1) * raio * 0.28;
-    m.desenhar(420, (c, t) => {
-      const e = ease.saida(Math.min(1, t * 2));
-      c.globalAlpha = 1 - t;
-      c.strokeStyle = pl.cor;
-      c.shadowColor = pl.brilho;
+    m.desenhar(800, (c, t) => {
+      const e = ease.saida(Math.min(1, t * 4));
+      c.globalAlpha = t < 0.5 ? 1 : 1 - (t - 0.5) / 0.5;
+      c.strokeStyle = '#ff5a5a';
+      c.shadowColor = '#ff2a2a';
       c.shadowBlur = 18;
       c.lineWidth = (critico ? 9 : 6) * m.escala;
       c.lineCap = 'round';
@@ -756,5 +799,4 @@ export async function tocarArma(cena: CenaArma) {
     return;
   }
   impacto(m, alvo.p, { tipo: 'toque', elemento: (cena.elemento as Anim['elemento']) ?? 'metal' }, alvo.desfecho, tipo === 'impacto' ? 1.1 : 0.85);
-  if (critico) glifo(m, '💥', alvo.p, alvo.raio * 1.2, 650);
 }

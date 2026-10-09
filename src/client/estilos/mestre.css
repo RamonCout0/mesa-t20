@@ -1354,3 +1354,37 @@ body[data-aba="bestiario"] .testes-m, body[data-aba="galeria"] .testes-m { displ
 .cena-salva-x { position: absolute; top: 50%; right: 6px; translate: 0 -50%; width: 28px; height: 28px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: rgba(9, 6, 13, 0.6); color: var(--suave); cursor: pointer; }
 .cena-salva-x:hover { color: var(--perigo); }
 .cena-salva-x .ico { width: 14px; height: 14px; }
+
+/* Acoes gastas pelo heroi da vez (P = padrao, M = movimento); clique devolve. */
+.gasto-m { display: inline-flex; gap: 3px; padding: 4px; border: 0; border-radius: 9px; background: rgba(255, 255, 255, 0.05); cursor: pointer; }
+.gasto-m i {
+  display: grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; font: 700 11px var(--fonte-num); font-style: normal;
+  background: rgba(78, 201, 140, 0.22); color: #b9f0d2; box-shadow: inset 0 0 0 1px rgba(78, 201, 140, 0.5);
+}
+.gasto-m i.x { background: rgba(255, 255, 255, 0.05); color: var(--apagado); box-shadow: none; text-decoration: line-through; }
+
+/* ---------- habilidades do inimigo (editor e botoes na carta) ---------- */
+dialog.largo { width: min(860px, 96vw); }
+.campo-habs { display: grid; gap: 8px; }
+.rotulo-habs { font-size: 12px; font-weight: 600; color: var(--suave); }
+.habs-ed { display: grid; gap: 6px; }
+.hab-ed { border-radius: 12px; background: rgba(255, 255, 255, 0.03); box-shadow: inset 0 0 0 1px var(--linha); }
+.hab-ed.aberta { background: rgba(232, 195, 122, 0.05); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.35); }
+.hab-linha { display: flex; align-items: center; gap: 6px; padding: 6px 8px; }
+.hab-titulo { flex: 1; min-width: 0; display: grid; gap: 1px; padding: 2px 4px; border: 0; background: none; color: var(--texto); text-align: left; cursor: pointer; }
+.hab-titulo b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hab-titulo small { font-size: 11.5px; color: var(--apagado); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#formEditor .hab-chip { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--suave); white-space: nowrap; }
+.hab-corpo { display: grid; gap: 10px; padding: 4px 12px 12px; }
+.hab-corpo textarea { min-height: 90px; }
+.hab-corpo > .btn { justify-self: start; }
+.chip-acao.hab b { margin-left: 2px; color: #a9c6ff; }
+.chip-acao.info { opacity: 0.85; border-style: dashed; }
+.chip-acao.sem-pm { opacity: 0.45; }
+.hab-detalhe {
+  display: grid; gap: 4px; margin-top: 8px; padding: 10px 12px; border-radius: 12px; max-height: 220px; overflow-y: auto;
+  background: rgba(8, 5, 12, 0.5); box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.25);
+}
+.hab-detalhe b { color: var(--ouro); font-size: 14px; }
+.hab-detalhe small { color: #a9c6ff; font-size: 12px; }
+.hab-detalhe p { margin: 2px 0 0; font-size: 13px; line-height: 1.5; color: var(--suave); white-space: pre-wrap; }

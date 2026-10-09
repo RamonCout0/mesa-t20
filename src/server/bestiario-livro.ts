@@ -172,7 +172,7 @@ export function dadosDaAmeaca(f: FichaAmeaca) {
   return {
     nome: f.nome, subtitulo: f.tipo, nd: f.nd ? `ND ${f.nd}` : '', pvMax: f.pv, pmMax: f.pm, defesa: f.defesa, bonusIni: f.iniciativa,
     fort: f.fort, ref: f.ref, von: f.von, rd: f.defesas.rd, imunidades: f.defesas.imunidades, vulnerabilidades: f.defesas.vulnerabilidades,
-    ataques: f.ataques, habilidades: f.habilidades.map((nome) => ({ nome, ativa: false })),
+    ataques: f.ataques, habilidades: f.habilidades,
     notas: [f.atributos, f.pericias && `Perícias: ${f.pericias}`, f.equipamento && `Equipamento: ${f.equipamento}`].filter(Boolean).join('\n'),
     texto: f.texto, tema: temaDe(f), tier: tierDe(f.nd), revelar: 'estado',
   };

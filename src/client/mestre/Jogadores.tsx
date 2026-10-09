@@ -45,7 +45,11 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
       }
       const r = await enviarArquivo('/api/importar-ficha', f, { 'x-pin': pin });
       if (!r.ok) avisar(`${f.name}: ${r.erro}`);
-      else avisar(`${f.name} importada.${(r.avisos as string[]).length ? ` ${(r.avisos as string[]).join(' ')}` : ''}`, 'info');
+      else {
+        const mud = (r.mudancas as string[] | undefined) ?? [];
+        const titulo = r.atualizada ? `Ficha atualizada pelo PDF${mud.length ? `: ${mud.join(' · ')}` : ' (nada mudou)'}.` : `${f.name} importada.`;
+        avisar(`${titulo}${(r.avisos as string[]).length ? ` ${(r.avisos as string[]).join(' ')}` : ''}`, 'info');
+      }
     }
     setEnviando(false);
   };
@@ -87,7 +91,7 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
                 checked={estado.opcoes.acaoSoNaVez}
                 onChange={(e) => enviar({ tipo: 'opcoes', opcoes: { acaoSoNaVez: e.target.checked } })}
               />
-              Em combate, cada um só age na sua vez
+              Em combate, cada um só age na sua vez (fora dela, só reações; conta padrão + movimento)
             </label>
             <label className="check">
               <input
@@ -186,6 +190,8 @@ export function Jogadores({ estado, fichas, info, visivel }: { estado: Estado; f
           key={fichaEditada.id}
           ficha={fichaEditada}
           completo
+          mestre
+          cabecalhos={{ 'x-pin': pin }}
           fechar={() => setEditando(null)}
           salvar={async (patch) => {
             const r = await acao({ acao: 'editar', id: fichaEditada.id, patch });

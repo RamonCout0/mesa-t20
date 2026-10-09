@@ -6,7 +6,16 @@ export interface Ponto {
   y: number;
 }
 
-export type FormaParticula = 'brilho' | 'faisca' | 'fumaca' | 'anel' | 'estilhaco' | 'estrela';
+export type FormaParticula =
+  | 'brilho' | 'faisca' | 'fumaca' | 'anel' | 'estilhaco' | 'estrela'
+  /** Gota que aponta para onde cai (acido, sangue, agua). */
+  | 'gota'
+  /** Folha girando (natureza). */
+  | 'folha'
+  /** Losango de gelo com contorno claro (frio). */
+  | 'cristal'
+  /** Bolha com reflexo (acido, veneno, agua). */
+  | 'bolha';
 
 export interface Particula {
   x: number;
@@ -259,6 +268,67 @@ export class MotorFx {
         c.closePath();
         c.fill();
         c.restore();
+      } else if (p.forma === 'gota') {
+        // Gota alongada na direcao do movimento, com ponta para tras.
+        const ang = Math.atan2(p.vy, p.vx);
+        const estica = 1 + Math.min(1.6, Math.hypot(p.vx, p.vy) / 500);
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(ang);
+        c.fillStyle = p.cor;
+        c.beginPath();
+        c.arc(0, 0, tam * 0.55, -Math.PI / 2, Math.PI / 2);
+        c.lineTo(-tam * estica, 0);
+        c.closePath();
+        c.fill();
+        c.restore();
+      } else if (p.forma === 'folha') {
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.scale(1, 0.45 + 0.35 * Math.abs(Math.sin(p.rot * 1.7)));
+        c.fillStyle = p.cor;
+        c.beginPath();
+        c.moveTo(-tam, 0);
+        c.quadraticCurveTo(0, -tam * 0.9, tam, 0);
+        c.quadraticCurveTo(0, tam * 0.9, -tam, 0);
+        c.fill();
+        c.globalAlpha *= 0.6;
+        c.strokeStyle = 'rgba(255,255,255,0.7)';
+        c.lineWidth = Math.max(1, tam * 0.08);
+        c.beginPath();
+        c.moveTo(-tam * 0.8, 0);
+        c.lineTo(tam * 0.8, 0);
+        c.stroke();
+        c.restore();
+      } else if (p.forma === 'cristal') {
+        c.save();
+        c.translate(p.x, p.y);
+        c.rotate(p.rot);
+        c.fillStyle = p.cor;
+        c.strokeStyle = '#ffffff';
+        c.lineWidth = Math.max(1, tam * 0.1);
+        c.shadowColor = p.cor;
+        c.shadowBlur = tam;
+        c.beginPath();
+        c.moveTo(0, -tam * 1.4);
+        c.lineTo(tam * 0.45, 0);
+        c.lineTo(0, tam * 1.4);
+        c.lineTo(-tam * 0.45, 0);
+        c.closePath();
+        c.fill();
+        c.stroke();
+        c.restore();
+      } else if (p.forma === 'bolha') {
+        c.strokeStyle = p.cor;
+        c.lineWidth = Math.max(1, tam * 0.14);
+        c.beginPath();
+        c.arc(p.x, p.y, tam, 0, Math.PI * 2);
+        c.stroke();
+        c.fillStyle = 'rgba(255,255,255,0.75)';
+        c.beginPath();
+        c.arc(p.x - tam * 0.35, p.y - tam * 0.35, tam * 0.22, 0, Math.PI * 2);
+        c.fill();
       } else if (p.forma === 'anel') {
         c.strokeStyle = p.cor;
         c.lineWidth = Math.max(1, tam * 0.12);

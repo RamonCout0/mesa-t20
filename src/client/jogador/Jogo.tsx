@@ -16,6 +16,7 @@ import { Segredos } from './Segredos.tsx';
 import type { Segredo } from '../comum/tipos-cliente.ts';
 import { Lancamento, type PedidoLancamento } from './Resultado.tsx';
 import { postar } from '../comum/conexao.ts';
+import { faltaAcao, type Execucao } from '../../shared/execucao.ts';
 
 export type Aba = 'carta' | 'acoes' | 'magias' | 'dados' | 'mais';
 
@@ -40,6 +41,8 @@ export interface PropsAba {
   agir: (acao: Record<string, unknown>, opcoes?: { dados?: number[]; titulo?: string; secreta?: boolean }) => Promise<boolean>;
   /** Posso agir agora? (vez na iniciativa, consciente...) Devolve o motivo se nao. */
   bloqueio: string | null;
+  /** Motivo para nao poder usar algo com esta execucao agora (fora da vez so reacao; padrao/movimento ja gastos). */
+  bloqueioDe: (execucao: Execucao) => string | null;
 }
 
 function abaGuardada(): Aba {
@@ -105,10 +108,19 @@ export function Jogo({ codigo, inicial, sair, avisar }: { codigo: string; inicia
       });
     });
   };
+  const regraDaVez = Boolean(estado?.turnos.ativo && estado.opcoes.acaoSoNaVez);
   const bloqueio = !heroi ? 'Você ainda não está na mesa.'
     : heroi.pv <= 0 ? 'Você está caído.'
-      : estado?.turnos.ativo && estado.opcoes.acaoSoNaVez && !naVez ? 'Não é a sua vez.' : null;
-  const props: PropsAba = { ficha, heroi, estado, codigo, avisar, agir, bloqueio };
+      : regraDaVez && !naVez ? 'Não é a sua vez: só reações.' : null;
+  // Mesma regra do servidor (regras.ts, checarVez): aqui so para travar os botoes antes.
+  const bloqueioDe = (execucao: Execucao) => {
+    if (!heroi) return 'Você ainda não está na mesa.';
+    if (heroi.pv <= 0) return 'Você está caído.';
+    if (!regraDaVez || execucao === 'reacao') return null;
+    if (!naVez) return execucao === 'livre' ? 'Ação livre só na sua vez.' : 'Não é a sua vez: fora dela, só reações.';
+    return faltaAcao(estado!.turnos.gasto ?? { padrao: false, movimento: false }, execucao);
+  };
+  const props: PropsAba = { ficha, heroi, estado, codigo, avisar, agir, bloqueio, bloqueioDe };
 
   // Testes que o mestre pediu e este heroi ainda nao rolou.
   const pedidos = heroi ? (estado?.pedidos ?? []).filter((p) => p.alvos.includes(heroi.id) && !p.respostas[heroi.id]) : [];

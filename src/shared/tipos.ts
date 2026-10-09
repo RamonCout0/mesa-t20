@@ -1,6 +1,7 @@
 // Tipos do estado da mesa, compartilhados entre servidor e telas.
 import type { Revelar, Tema, Tier } from './condicoes.ts';
 import type { EfeitoAtivo, Temporizador } from './acoes.ts';
+import type { Gasto } from './execucao.ts';
 
 export type Lado = 'aliados' | 'inimigos';
 export type Atributo = 'for' | 'des' | 'con' | 'int' | 'sab' | 'car';
@@ -38,10 +39,29 @@ export interface Ataque {
   arquetipo: ArquetipoArma;
 }
 
+/** Quem uma habilidade de inimigo afeta quando o mestre usa. */
+export type AlvoHabilidade = 'inimigos' | 'um' | 'si' | 'aliados' | 'nenhum';
+
 export interface Habilidade {
   nome: string;
   /** Aparece no telão (chip do boss). */
   ativa: boolean;
+  /** Descrição completa (só o mestre vê). */
+  texto?: string;
+  /** Padrão, movimento, completa, livre ou reação. */
+  execucao?: string;
+  /** PM que o inimigo gasta ao usar. */
+  pm?: number;
+  /** Botão de usar na carta: em quem acerta ('nenhum' = só anuncia no telão). */
+  alvo?: AlvoHabilidade;
+  dano?: string;
+  tipoDano?: TipoDano | '';
+  cura?: string;
+  res?: 'fort' | 'ref' | 'von' | '';
+  cd?: number;
+  sucesso?: 'metade' | 'anula';
+  /** Condições se o alvo falhar ("cego:2" = por 2 rodadas). */
+  condicoes?: string[];
 }
 
 export interface Combatente {
@@ -106,6 +126,8 @@ export type Ameaca = Pick<Inimigo, CamposAmeaca> & {
   texto: string;
   criadaEm: number;
   atualizadaEm: number;
+  /** 3 = habilidades completas (texto, execucao, dano, teste). Fichas sem isto sao relidas do texto. */
+  versao?: number;
 };
 
 export interface Mostrar {
@@ -160,12 +182,14 @@ export interface Turnos {
   ativo: boolean;
   rodada: number;
   atual: string | null;
+  /** Acoes ja gastas por quem esta na vez (padrao / movimento). */
+  gasto: Gasto;
 }
 
 export interface Opcoes {
   /** Celulares podem criar personagens importando o PDF do Nimb. */
   importarPeloCelular: boolean;
-  /** Jogador só age na própria vez quando há combate em andamento. */
+  /** Com combate em andamento: o jogador só age na própria vez (fora dela, só reações) e conta padrão + movimento. */
   acaoSoNaVez: boolean;
   /** Jogador edita a própria ficha toda pelo celular (atributos, ataques, magias...). */
   fichaLivre: boolean;

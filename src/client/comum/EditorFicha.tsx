@@ -1,6 +1,6 @@
 // Editor completo da ficha, dentro da mesa: regra da casa, item magico, magia propria (homebrew),
 // subir de nivel... sem precisar voltar ao Nimb. Usado no painel do mestre e no celular.
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import '../estilos/editor-ficha.css';
 import { PERICIAS, type Ficha, type MagiaPropria, type Poder } from '../../shared/ficha.ts';
 import { ATRIBUTOS, NOME_ATRIBUTO, NOME_DANO, TIPOS_DANO, type Ataque, type Atributo, type TipoDano } from '../../shared/tipos.ts';
@@ -8,6 +8,8 @@ import { MAGIAS, buscarMagia } from '../../shared/magias.ts';
 import { CONDICOES } from '../../shared/condicoes.ts';
 import { expressaoValida } from '../../shared/rolagem.ts';
 import { Icone } from './Icone.tsx';
+import { EXECUCOES, NOME_EXECUCAO, execucaoDoTexto, type Execucao } from '../../shared/execucao.ts';
+import { CLASSES, acharClasse, calcular, equipamentoVazio, type Equipamento } from '../../shared/regras-ficha.ts';
 
 type Aba = 'identidade' | 'atributos' | 'pericias' | 'ataques' | 'magias' | 'poderes' | 'notas';
 const ABAS: [Aba, string][] = [
@@ -65,9 +67,16 @@ interface Props {
   completo: boolean;
   salvar: (patch: Record<string, unknown>) => Promise<boolean>;
   fechar: () => void;
+  /** Acesso a biblioteca da casa (x-codigo do jogador ou x-pin do mestre). */
+  cabecalhos?: Record<string, string>;
+  /** O mestre pode guardar itens, poderes e magias na biblioteca da casa. */
+  mestre?: boolean;
 }
 
-export function EditorFicha({ ficha, completo, salvar, fechar }: Props) {
+interface BibliotecaCasa { itens: Poder[]; poderes: Poder[]; magias: MagiaPropria[] }
+type TipoCasa = keyof BibliotecaCasa;
+
+export function EditorFicha({ ficha, completo, salvar, fechar, cabecalhos = {}, mestre = false }: Props) {
   const [f, setF] = useState<Ficha>(() => structuredClone(ficha));
   const [aba, setAba] = useState<Aba>('identidade');
   const [rdTexto, setRdTexto] = useState(() => rdParaTexto(ficha.rd));
@@ -76,6 +85,24 @@ export function EditorFicha({ ficha, completo, salvar, fechar }: Props) {
   const [aberta, setAberta] = useState<string | null>(null); // magia propria aberta para editar
 
   const mudar = (patch: Partial<Ficha>) => setF((x) => ({ ...x, ...patch }));
+
+  // Biblioteca da casa: itens, poderes e magias do grupo para pôr em qualquer ficha.
+  const [casa, setCasa] = useState<BibliotecaCasa | null>(null);
+  const [msgCasa, setMsgCasa] = useState('');
+  useEffect(() => {
+    fetch('/api/casa', { headers: cabecalhos }).then((r) => r.json()).then((r) => { if (r.ok) setCasa(r.casa); }).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const guardar = mestre ? async (tipo: TipoCasa, item: Poder | MagiaPropria) => {
+    try {
+      const resp = await fetch('/api/casa', { method: 'POST', headers: { 'Content-Type': 'application/json', ...cabecalhos }, body: JSON.stringify({ acao: 'guardar', tipo, item }) });
+      const r = await resp.json();
+      if (!r.ok) throw new Error(r.erro);
+      setCasa(r.casa);
+      setMsgCasa(`“${item.nome}” ${r.resultado === 'atualizado' ? 'atualizado' : 'guardado'} na biblioteca da casa: agora dá para pôr em qualquer ficha.`);
+    } catch (e) {
+      setMsgCasa((e as Error).message || 'Não consegui guardar.');
+    }
+  } : undefined;
   const sujo = JSON.stringify(f) !== JSON.stringify(ficha) || rdTexto !== rdParaTexto(ficha.rd);
 
   const enviar = async () => {
@@ -105,6 +132,7 @@ export function EditorFicha({ ficha, completo, salvar, fechar }: Props) {
           </div>
           <button type="button" className="ed-x" onClick={sair} aria-label="Fechar"><Icone nome="fechar" /></button>
         </header>
+        {msgCasa ? <p className="ed-aviso" onClick={() => setMsgCasa('')}>{msgCasa}</p> : null}
         {!completo ? <p className="ed-aviso">O mestre deixou só as anotações livres. Para mudar números, ataques ou magias, peça ao mestre.</p> : null}
         <nav className="ed-abas">
           {ABAS.map(([id, nome]) => (
@@ -127,6 +155,7 @@ export function EditorFicha({ ficha, completo, salvar, fechar }: Props) {
 
           {aba === 'atributos' ? (
             <>
+              <CalculoPelaRegra f={f} mudar={mudar} />
               <div className="ed-atributos">
                 {ATRIBUTOS.map((a) => (
                   <label key={a}>
@@ -212,13 +241,13 @@ export function EditorFicha({ ficha, completo, salvar, fechar }: Props) {
           ) : null}
 
           {aba === 'magias' ? (
-            <Magias f={f} mudar={mudar} busca={busca} setBusca={setBusca} aberta={aberta} setAberta={setAberta} />
+            <Magias f={f} mudar={mudar} busca={busca} setBusca={setBusca} aberta={aberta} setAberta={setAberta} daCasa={casa?.magias} guardar={guardar && ((m) => guardar('magias', m))} />
           ) : null}
 
           {aba === 'poderes' ? (
             <>
-              <ListaTextos titulo="Itens mágicos e equipamentos especiais" vazio="Ex.: Anel do Protetor — +2 na Defesa (já some na Defesa da ficha)." itens={f.itens} mudar={(itens) => mudar({ itens })} novo="Novo item" />
-              <ListaTextos titulo="Poderes e regras da casa" vazio="Habilidades de classe, poderes gerais ou uma regra combinada na mesa." itens={f.poderes} mudar={(poderes) => mudar({ poderes })} novo="Novo poder / regra" />
+              <ListaTextos titulo="Itens mágicos e equipamentos especiais" vazio="Ex.: Anel do Protetor — +2 na Defesa (já some na Defesa da ficha)." itens={f.itens} mudar={(itens) => mudar({ itens })} novo="Novo item" daCasa={casa?.itens} guardar={guardar && ((p) => guardar('itens', p))} />
+              <ListaTextos titulo="Poderes e regras da casa" vazio="Habilidades de classe, poderes gerais ou uma regra combinada na mesa." itens={f.poderes} mudar={(poderes) => mudar({ poderes })} novo="Novo poder / regra" daCasa={casa?.poderes} guardar={guardar && ((p) => guardar('poderes', p))} />
               <div className="ed-grade">
                 <Campo rotulo="Proficiências"><input value={f.proficiencias} maxLength={600} onChange={(e) => mudar({ proficiencias: e.target.value })} /></Campo>
               </div>
@@ -303,7 +332,10 @@ function CamposEfeito({ e, mudarE }: { e: MagiaPropria['efeito']; mudarE: (patch
   );
 }
 
-function ListaTextos({ titulo, vazio, itens, mudar, novo }: { titulo: string; vazio: string; itens: Poder[]; mudar: (x: Poder[]) => void; novo: string }) {
+function ListaTextos({ titulo, vazio, itens, mudar, novo, daCasa, guardar }: {
+  titulo: string; vazio: string; itens: Poder[]; mudar: (x: Poder[]) => void; novo: string;
+  daCasa?: Poder[]; guardar?: (p: Poder) => void;
+}) {
   const mudarI = (i: number, patch: Partial<Poder>) => mudar(itens.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   return (
     <section className="ed-secao">
@@ -315,6 +347,7 @@ function ListaTextos({ titulo, vazio, itens, mudar, novo }: { titulo: string; va
           <div key={i} className="ed-item">
             <div className="ed-linha">
               <input className="ed-nome" value={p.nome} placeholder="Nome" maxLength={60} onChange={(e) => mudarI(i, { nome: e.target.value })} />
+              {guardar ? <button type="button" className="ed-casa" title="Guardar na biblioteca da casa (usar em outras fichas)" onClick={() => guardar(p)}><Icone nome="livro" /></button> : null}
               <button type="button" className="ed-remover" onClick={() => mudar(itens.filter((_, j) => j !== i))} aria-label="Remover"><Icone nome="lixo" /></button>
             </div>
             <textarea value={p.texto} placeholder="O que faz" maxLength={2000} onChange={(e) => mudarI(i, { texto: e.target.value })} />
@@ -332,6 +365,12 @@ function ListaTextos({ titulo, vazio, itens, mudar, novo }: { titulo: string; va
               <>
                 <div className="ed-grade">
                   <Campo rotulo="Custo (PM)"><input type="number" min={0} max={30} value={p.pm ?? 0} onChange={(e) => mudarI(i, { pm: Number(e.target.value) || 0 })} /></Campo>
+                  <Campo rotulo="Execução (reação vale fora da vez)">
+                    <select value={p.execucao ?? ''} onChange={(e) => mudarI(i, { execucao: (e.target.value || undefined) as Execucao | undefined })}>
+                      <option value="">Pelo texto ({NOME_EXECUCAO[execucaoDoTexto(p.texto)]})</option>
+                      {EXECUCOES.map((x) => <option key={x} value={x}>{NOME_EXECUCAO[x]}</option>)}
+                    </select>
+                  </Campo>
                   <Campo rotulo="Bônus de ataque enquanto ativo"><input type="number" value={p.bonus?.ataque ?? 0} onChange={(e) => mudarI(i, { bonus: { ...p.bonus, ataque: Number(e.target.value) || 0 } })} /></Campo>
                   <Campo rotulo="Bônus de dano enquanto ativo"><input type="number" value={p.bonus?.dano ?? 0} onChange={(e) => mudarI(i, { bonus: { ...p.bonus, dano: Number(e.target.value) || 0 } })} /></Campo>
                   <Campo rotulo="Bônus de Defesa enquanto ativo"><input type="number" value={p.bonus?.defesa ?? 0} onChange={(e) => mudarI(i, { bonus: { ...p.bonus, defesa: Number(e.target.value) || 0 } })} /></Campo>
@@ -348,13 +387,17 @@ function ListaTextos({ titulo, vazio, itens, mudar, novo }: { titulo: string; va
           </div>
         );
       })}
-      <button type="button" className="ed-mais" onClick={() => mudar([...itens, { nome: '', texto: '' }])}><Icone nome="mais" />{novo}</button>
+      <div className="ed-linha">
+        <button type="button" className="ed-mais" onClick={() => mudar([...itens, { nome: '', texto: '' }])}><Icone nome="mais" />{novo}</button>
+        <DaCasa lista={daCasa} jaTem={itens.map((x) => x.nome)} pegar={(p) => mudar([...itens, structuredClone(p)])} />
+      </div>
     </section>
   );
 }
 
-function Magias({ f, mudar, busca, setBusca, aberta, setAberta }: {
+function Magias({ f, mudar, busca, setBusca, aberta, setAberta, daCasa, guardar }: {
   f: Ficha; mudar: (p: Partial<Ficha>) => void; busca: string; setBusca: (s: string) => void; aberta: string | null; setAberta: (s: string | null) => void;
+  daCasa?: MagiaPropria[]; guardar?: (m: MagiaPropria) => void;
 }) {
   const conhecidas = f.magias.map((id) => buscarMagia(id)).filter((m) => m !== undefined);
   const resultados = useMemo(() => {
@@ -456,6 +499,7 @@ function Magias({ f, mudar, busca, setBusca, aberta, setAberta }: {
                   <div className="ed-linha">
                     <span className="ed-dica">Custo: {[0, 1, 3, 6, 10, 15][m.circulo]} PM{e.res ? ` · CD da ficha` : ''}</span>
                     <span className="ed-deco" />
+                    {guardar ? <button type="button" className="ed-casa" onClick={() => guardar(m)}><Icone nome="livro" />Guardar na casa</button> : null}
                     <button type="button" className="ed-remover" onClick={() => mudar({ magiasProprias: f.magiasProprias.filter((_, j) => j !== i) })}><Icone nome="lixo" />Apagar magia</button>
                   </div>
                 </>
@@ -463,11 +507,86 @@ function Magias({ f, mudar, busca, setBusca, aberta, setAberta }: {
             </div>
           );
         })}
-        <button type="button" className="ed-mais" onClick={() => { const m = novaMagia(); mudar({ magiasProprias: [...f.magiasProprias, m] }); setAberta(m.id); }}>
-          <Icone nome="mais" />Criar magia própria
-        </button>
+        <div className="ed-linha">
+          <button type="button" className="ed-mais" onClick={() => { const m = novaMagia(); mudar({ magiasProprias: [...f.magiasProprias, m] }); setAberta(m.id); }}>
+            <Icone nome="mais" />Criar magia própria
+          </button>
+          <DaCasa
+            lista={daCasa}
+            jaTem={f.magiasProprias.map((x) => x.nome)}
+            pegar={(m) => mudar({ magiasProprias: [...f.magiasProprias, { ...structuredClone(m), id: `propria-${Math.random().toString(36).slice(2, 9)}` }] })}
+          />
+        </div>
       </section>
     </>
   );
 }
 
+
+/**
+ * Monta os numeros pela regra do livro: escolhe a classe, o nivel e o equipamento e a ficha recebe
+ * PV, PM, Defesa e (se quiser) os totais das pericias. Bom para ficha do zero ou para subir de nivel.
+ */
+function CalculoPelaRegra({ f, mudar }: { f: Ficha; mudar: (patch: Partial<Ficha>) => void }) {
+  const [classe, setClasse] = useState(() => acharClasse(f.classe)?.nome ?? '');
+  const [eq, setEq] = useState<Equipamento>(() => ({ ...equipamentoVazio(), outros: Math.max(0, f.defesa - 10 - f.atributos.des) }));
+  const [comPericias, setComPericias] = useState(f.fonte === 'manual');
+  const dados = CLASSES.find((c) => c.nome === classe);
+  const r = dados ? calcular(dados, f.nivel, f.atributos, f.pericias, eq) : null;
+  const n = (k: keyof Equipamento) => (
+    <input type="number" value={Number(eq[k])} onChange={(e) => setEq({ ...eq, [k]: Number(e.target.value) || 0 })} />
+  );
+  return (
+    <details className="ed-regra" open={f.fonte === 'manual' && f.pvMax <= 1}>
+      <summary><Icone nome="livro" />Calcular pela regra do livro (PV, PM, Defesa, perícias)</summary>
+      <div className="ed-grade">
+        <Campo rotulo="Classe">
+          <select value={classe} onChange={(e) => { setClasse(e.target.value); if (!f.classe) mudar({ classe: e.target.value }); }}>
+            <option value="">Escolha…</option>
+            {CLASSES.map((c) => <option key={c.nome} value={c.nome}>{c.nome} ({c.pvInicial}+{c.pvNivel}/nível, {c.pmNivel} PM)</option>)}
+          </select>
+        </Campo>
+        <Campo rotulo="Nível"><input type="number" min={1} max={20} value={f.nivel} onChange={(e) => mudar({ nivel: Number(e.target.value) || 1 })} /></Campo>
+        <Campo rotulo="Armadura (+Defesa)">{n('armadura')}</Campo>
+        <Campo rotulo="Escudo (+Defesa)">{n('escudo')}</Campo>
+        <Campo rotulo="Outros na Defesa">{n('outros')}</Campo>
+        <Campo rotulo="PV extra (raça, poderes)">{n('pvExtra')}</Campo>
+        <Campo rotulo="PM extra (raça, poderes)">{n('pmExtra')}</Campo>
+      </div>
+      <label className="ed-check"><input type="checkbox" checked={eq.pesada} onChange={(e) => setEq({ ...eq, pesada: e.target.checked })} />Armadura pesada (não soma Destreza)</label>
+      <label className="ed-check" title="Total = metade do nível + atributo + treino (+2 até o 6º, +4 até o 14º, +6 depois). Bônus de poderes e itens precisam ser somados à mão.">
+        <input type="checkbox" checked={comPericias} onChange={(e) => setComPericias(e.target.checked)} />
+        Recalcular os totais das perícias (marque as treinadas na aba Perícias)
+      </label>
+      {r ? (
+        <div className="ed-regra-res">
+          <span>PV <b>{r.pvMax}</b></span><span>PM <b>{r.pmMax}</b></span><span>Defesa <b>{r.defesa}</b></span>
+          {r.chave ? <span>Magias: <b>{NOME_ATRIBUTO[r.chave]}</b></span> : null}
+          <button
+            type="button"
+            className="ed-btn ouro"
+            onClick={() => mudar({
+              pvMax: r.pvMax, pmMax: r.pmMax, defesa: r.defesa, classe: f.classe || classe,
+              ...(comPericias ? { pericias: r.pericias } : {}),
+              ...(r.chave && !f.atributoChave ? { atributoChave: r.chave } : {}),
+            })}
+          >
+            <Icone nome="check" />Aplicar na ficha
+          </button>
+        </div>
+      ) : <p className="ed-dica">Escolha a classe para ver o cálculo.</p>}
+    </details>
+  );
+}
+
+/** Escolher um item, poder ou magia da biblioteca da casa para pôr nesta ficha. */
+function DaCasa<T extends { nome: string }>({ lista, jaTem, pegar }: { lista?: T[]; jaTem: string[]; pegar: (x: T) => void }) {
+  const disponiveis = (lista ?? []).filter((x) => !jaTem.some((n) => n.toLowerCase() === x.nome.toLowerCase()));
+  if (!lista?.length) return null;
+  return (
+    <select className="ed-da-casa" value="" disabled={!disponiveis.length} onChange={(e) => { const x = disponiveis[Number(e.target.value)]; if (x) pegar(x); }}>
+      <option value="">{disponiveis.length ? `📚 Da biblioteca da casa (${disponiveis.length})…` : '📚 Biblioteca: já tem tudo'}</option>
+      {disponiveis.map((x, i) => <option key={x.nome} value={i}>{x.nome}</option>)}
+    </select>
+  );
+}

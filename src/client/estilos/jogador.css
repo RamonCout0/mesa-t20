@@ -582,3 +582,37 @@ li.cura .tag-desfecho { background: rgba(79, 209, 139, 0.2); color: #9df0c3; }
 .carta-secreta .responder .j-btn { min-height: 0; height: 100%; padding: 0; }
 .carta-secreta > .j-btn { background: rgba(43, 29, 16, 0.85); color: #f3e6c8; border-color: transparent; }
 .editar-ficha { margin-top: 16px; }
+
+/* ---------- turno: acoes que sobram, mover-se, passar a vez ---------- */
+.turno-j {
+  display: grid; gap: 10px; margin: 0 0 14px; padding: 12px; border-radius: 14px;
+  background: linear-gradient(180deg, rgba(232, 195, 122, 0.16), rgba(232, 195, 122, 0.05));
+  box-shadow: inset 0 0 0 1px rgba(232, 195, 122, 0.4);
+}
+.turno-j.fora { background: rgba(255, 255, 255, 0.04); box-shadow: inset 0 0 0 1px var(--linha); gap: 2px; text-align: center; }
+.turno-j.fora b { color: var(--texto); font-size: 14px; }
+.turno-j.fora small { color: var(--apagado); font-size: 12px; }
+.turno-acoes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.turno-acoes span {
+  display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; border-radius: 10px;
+  background: rgba(78, 201, 140, 0.16); box-shadow: inset 0 0 0 1px rgba(78, 201, 140, 0.5); color: #c9f5dc; font-weight: 700; font-size: 13px;
+  transition: opacity 0.3s, filter 0.3s;
+}
+.turno-acoes span .ico { width: 15px; height: 15px; }
+.turno-acoes span.gasta { opacity: 0.4; filter: grayscale(1); text-decoration: line-through; }
+.turno-botoes { display: flex; flex-wrap: wrap; gap: 8px; }
+.turno-botoes button {
+  flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 38px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: rgba(255, 255, 255, 0.08); color: var(--texto); font: 600 13px var(--fonte);
+}
+.turno-botoes button .ico { width: 15px; height: 15px; }
+.turno-botoes button:disabled { opacity: 0.35; }
+.turno-botoes button.passar { background: var(--grad-ouro); color: #1a1024; }
+.j-item.travado { opacity: 0.42; filter: saturate(0.4); }
+.tag-exec {
+  display: inline-block; margin-right: 6px; padding: 1px 6px; border-radius: 6px; font-style: normal; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.04em; text-transform: uppercase; vertical-align: 1px; background: rgba(255, 255, 255, 0.08); color: var(--suave);
+}
+.tag-exec.reacao { background: rgba(78, 201, 140, 0.2); color: #9be8bf; }
+.tag-exec.movimento, .tag-exec.livre { background: rgba(76, 141, 255, 0.18); color: #b5ceff; }
+.tag-exec.completa { background: rgba(255, 140, 66, 0.18); color: #ffc9a3; }

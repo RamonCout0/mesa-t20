@@ -10,10 +10,12 @@ import { expressaoValida } from '../../shared/rolagem.ts';
 import { Retrato } from '../comum/pecas.tsx';
 import { usePainel } from './contexto.ts';
 import { Botao } from './Botao.tsx';
+import { resumoHabilidade } from './HabilidadesEditor.tsx';
 
 type Modo =
   | { tipo: 'ataque'; ataque: Ataque }
   | { tipo: 'habilidade' }
+  | { tipo: 'hab'; indice: number }
   | { tipo: 'magia'; magiaId: string }
   | { tipo: 'poder'; lista: 'poderes' | 'itens'; indice: number };
 
@@ -39,13 +41,16 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
     ? (['poderes', 'itens'] as const).flatMap((lista) => (ficha[lista] ?? []).map((p, indice) => ({ p, indice, lista })).filter(({ p }) => poderUsavel(p)))
     : [];
   const poderDoModo = modo?.tipo === 'poder' ? ficha?.[modo.lista]?.[modo.indice] : undefined;
+  // Habilidades do inimigo que viram botao (a linha "Magias" do livro e so informacao).
+  const habilidades = heroi ? [] : (ent as Inimigo).habilidades.map((h, indice) => ({ h, indice })).filter(({ h }) => h.alvo || h.texto);
+  const habDoModo = modo?.tipo === 'hab' ? (ent as Inimigo).habilidades[modo.indice] : undefined;
 
   if (!ataques.length && !magias.length && !poderes.length && heroi) return null;
 
   // Alvos sugeridos: o lado oposto primeiro.
   const oposto = (heroi ? estado.inimigos : estado.aliados) as Entidade[];
   const mesmo = (heroi ? estado.aliados : estado.inimigos) as Entidade[];
-  const multiplos = modo?.tipo === 'habilidade' || (modo?.tipo === 'poder' && (poderDoModo?.efeito?.maxAlvos ?? 1) !== 1) || (modo?.tipo === 'magia' && (() => {
+  const multiplos = modo?.tipo === 'habilidade' || (modo?.tipo === 'hab' && habDoModo?.alvo !== 'um') || (modo?.tipo === 'poder' && (poderDoModo?.efeito?.maxAlvos ?? 1) !== 1) || (modo?.tipo === 'magia' && (() => {
     const m = acharMagia(ficha, modo.magiaId);
     return m ? efeitoNaFicha(ficha, m).maxAlvos !== 1 : false;
   })());
@@ -61,6 +66,16 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
     if (modo.tipo === 'ataque') ok = await enviar({ tipo: 'atacarComo', autorId: ent.id, ataqueId: modo.ataque.id, alvoId: ids[0], extras: { bonus } });
     else if (modo.tipo === 'magia') ok = await enviar({ tipo: 'magiaComo', autorId: ent.id, magiaId: modo.magiaId, alvos: ids });
     else if (modo.tipo === 'poder') ok = await enviar({ tipo: 'poderComo', autorId: ent.id, lista: modo.lista, indice: modo.indice, alvos: ids });
+    else if (modo.tipo === 'hab' && habDoModo) {
+      const h = habDoModo;
+      ok = await enviar({
+        tipo: 'habilidade', autorId: ent.id, alvos: ids,
+        habilidade: {
+          nome: h.nome, dano: h.dano, tipoDano: h.tipoDano, cura: h.cura, res: h.res || undefined, cd: h.cd, sucesso: h.sucesso,
+          condicoes: h.condicoes ?? [], pm: h.pm, alvo: h.alvo ?? 'nenhum', texto: h.texto,
+        },
+      });
+    }
     else {
       ok = await enviar({
         tipo: 'habilidade', autorId: ent.id, alvos: ids,
@@ -70,7 +85,7 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
     if (ok) { setModo(null); setAlvos([]); setBonus(0); }
   }
 
-  const precisaAlvo = modo?.tipo === 'poder' ? Boolean(poderDoModo?.efeito && !['si', 'nenhum'].includes(poderDoModo.efeito.alvo)) : modo?.tipo !== 'magia' || (() => {
+  const precisaAlvo = modo?.tipo === 'hab' ? !['si', 'nenhum', undefined].includes(habDoModo?.alvo) : modo?.tipo === 'poder' ? Boolean(poderDoModo?.efeito && !['si', 'nenhum'].includes(poderDoModo.efeito.alvo)) : modo?.tipo !== 'magia' || (() => {
     const m = acharMagia(ficha, modo.magiaId);
     return m ? !['si', 'nenhum'].includes(efeitoNaFicha(ficha, m).alvo) : true;
   })();
@@ -102,12 +117,30 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
             {poderes.map(({ p, indice, lista }) => <option key={`${lista}:${indice}`} value={`${lista}:${indice}`}>{p.nome}{p.pm ? ` (${p.pm} PM)` : ''}</option>)}
           </select>
         ) : null}
+        {habilidades.map(({ h, indice }) => {
+          const on = modo?.tipo === 'hab' && modo.indice === indice;
+          const semPm = Boolean(h.pm && (ent as Inimigo).pmMax && h.pm > ent.pm);
+          return (
+            <button key={`h${indice}`} type="button" className={`chip-acao hab ${on ? 'on' : ''} ${semPm ? 'sem-pm' : ''} ${h.alvo === 'nenhum' || !h.alvo ? 'info' : ''}`}
+              title={[resumoHabilidade(h), h.texto].filter(Boolean).join('\n\n')}
+              onClick={() => { setModo(on ? null : { tipo: 'hab', indice }); setAlvos([]); }}>
+              <span>{h.execucao === 'Reação' ? '🛡️' : h.alvo === 'nenhum' || !h.alvo ? '📜' : h.cura && !h.dano ? '💚' : '💥'}</span>{h.nome}{h.pm ? <b>{h.pm} PM</b> : null}
+            </button>
+          );
+        })}
         {!heroi ? (
           <button type="button" className={`chip-acao ${modo?.tipo === 'habilidade' ? 'on' : ''}`} onClick={() => { setModo(modo?.tipo === 'habilidade' ? null : { tipo: 'habilidade' }); setAlvos([]); }}>
-            <span>💥</span>Habilidade
+            <span>✏️</span>Avulsa
           </button>
         ) : null}
       </div>
+
+      {habDoModo ? (
+        <div className="hab-detalhe">
+          <b>{habDoModo.nome}</b>{resumoHabilidade(habDoModo) ? <small>{resumoHabilidade(habDoModo)}</small> : null}
+          {habDoModo.texto ? <p>{habDoModo.texto}</p> : null}
+        </div>
+      ) : null}
 
       {modo?.tipo === 'habilidade' ? (
         <div className="form-hab">
@@ -152,7 +185,9 @@ export function AcoesCard({ ent, lado, estado, ficha }: Props) {
           {multiplos ? <Botao classe="ouro pequeno" icone="check" texto={`Usar em ${alvos.length}`} disabled={!alvos.length} onClick={() => executar(alvos)} /> : null}
         </div>
       ) : null}
-      {modo && !precisaAlvo ? <Botao classe="ouro pequeno" icone="varinha" texto={modo.tipo === 'poder' ? 'Usar' : 'Lançar'} onClick={() => executar([])} /> : null}
+      {modo && !precisaAlvo ? (
+        <Botao classe="ouro pequeno" icone="varinha" texto={modo.tipo === 'hab' ? (habDoModo?.alvo === 'si' ? 'Usar em si' : 'Anunciar no telão') : modo.tipo === 'poder' ? 'Usar' : 'Lançar'} onClick={() => executar([])} />
+      ) : null}
     </div>
   );
 }

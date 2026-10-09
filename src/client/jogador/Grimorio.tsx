@@ -10,6 +10,7 @@ import { Icone } from '../comum/Icone.tsx';
 import type { PropsAba } from './Jogo.tsx';
 import { Folha } from './Folha.tsx';
 import { lerExpressao } from '../../shared/rolagem.ts';
+import { lerExecucao, NOME_EXECUCAO } from '../../shared/execucao.ts';
 
 /** Faces dos dados que o jogador segura (os do dano/cura da magia). */
 export function dadosDaExpressao(...exprs: (string | undefined)[]) {
@@ -23,6 +24,7 @@ export function dadosDaExpressao(...exprs: (string | undefined)[]) {
   return faces.slice(0, 6);
 }
 import { SeletorAlvos, type QuemPode } from './Alvos.tsx';
+import { PainelTurno } from './Acoes.tsx';
 
 export const ICONE_ESCOLA: Record<string, string> = {
   Abjur: '🛡️', Adiv: '👁️', Conv: '🌀', Encan: '💫', Evoc: '🔥', Ilusão: '🎭', Necro: '💀', Trans: '🧬',
@@ -55,6 +57,7 @@ export function Grimorio(props: PropsAba) {
 
   return (
     <main>
+      <PainelTurno {...props} />
       {ativas.length ? (
         <>
           <div className="j-secao"><h3>Ativas</h3><span className="conta">{ativas.length}</span><span className="deco" /></div>
@@ -99,11 +102,11 @@ export function Grimorio(props: PropsAba) {
           const custo = CUSTO_CIRCULO[m.circulo];
           const e = efeitoNaFicha(ficha, m);
           return (
-            <button key={m.id} type="button" className={`j-item ${custo > pm ? 'sem-pm' : ''}`} onClick={() => setAberta(m)}>
+            <button key={m.id} type="button" className={`j-item ${custo > pm ? 'sem-pm' : ''} ${props.bloqueioDe(lerExecucao(m.execucao)) ? 'travado' : ''}`} onClick={() => setAberta(m)}>
               <span className="icone-item">{m.fonte === FONTE_PROPRIA ? '🌟' : ICONE_ESCOLA[m.escola] ?? '✨'}</span>
               <span style={{ minWidth: 0 }}>
                 <b>{m.nome}</b>
-                <small>{[`${m.circulo}º`, e.dano ? `${e.dano}${e.tipoDano ? ` ${NOME_DANO[e.tipoDano]}` : ''}` : e.cura ? `cura ${e.cura}` : NOME_ESCOLA[m.escola], e.res ? TESTE[e.res] : m.alcance].filter(Boolean).join(' · ')}</small>
+                <small><i className={`tag-exec ${lerExecucao(m.execucao)}`}>{NOME_EXECUCAO[lerExecucao(m.execucao)]}</i>{[`${m.circulo}º`, e.dano ? `${e.dano}${e.tipoDano ? ` ${NOME_DANO[e.tipoDano]}` : ''}` : e.cura ? `cura ${e.cura}` : NOME_ESCOLA[m.escola], e.res ? TESTE[e.res] : m.alcance].filter(Boolean).join(' · ')}</small>
               </span>
               <span className="custo">{custo} PM</span>
             </button>
@@ -123,7 +126,8 @@ export function Grimorio(props: PropsAba) {
   );
 }
 
-function LancarMagia({ magia, fechar, ficha, heroi, estado, agir, bloqueio }: PropsAba & { magia: Magia; fechar: () => void }) {
+function LancarMagia({ magia, fechar, ficha, heroi, estado, agir, bloqueioDe }: PropsAba & { magia: Magia; fechar: () => void }) {
+  const bloqueio = bloqueioDe(lerExecucao(magia.execucao));
   const efeito = efeitoNaFicha(ficha, magia);
   const [vezes, setVezes] = useState<Record<number, number>>({});
   const [alvos, setAlvos] = useState<string[]>([]);
@@ -222,7 +226,7 @@ function LancarMagia({ magia, fechar, ficha, heroi, estado, agir, bloqueio }: Pr
           <span>Você tem <b>{pm}</b> PM</span>
         </div>
         {excede ? <p className="aviso-bloqueio">Passa do seu limite de {limite} PM por magia.</p> : falta ? <p className="aviso-bloqueio">PM insuficientes.</p> : bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
-        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || excede || falta || (precisaAlvo && !alvos.length) || !heroi} onClick={lancar}>
+        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || excede || falta || (precisaAlvo && !alvos.length) || Boolean(bloqueio)} onClick={lancar}>
           <Icone nome="varinha" />{enviando ? 'Conjurando…' : precisaAlvo && !alvos.length ? 'Escolha o alvo' : `Lançar (${custo} PM)`}
         </button>
       </div>
@@ -230,7 +234,8 @@ function LancarMagia({ magia, fechar, ficha, heroi, estado, agir, bloqueio }: Pr
   );
 }
 
-function UsarEfeito({ efeito, indice, uso, fechar, estado, heroi, agir }: PropsAba & { efeito: EfeitoAtivo; indice: number; uso: Uso; fechar: () => void }) {
+function UsarEfeito({ efeito, indice, uso, fechar, estado, heroi, agir, bloqueioDe }: PropsAba & { efeito: EfeitoAtivo; indice: number; uso: Uso; fechar: () => void }) {
+  const bloqueio = bloqueioDe(lerExecucao(uso.nome));
   const [alvos, setAlvos] = useState<string[]>([]);
   const [enviando, setEnviando] = useState(false);
   const quem = quemDoAlvo(uso.alvo);
@@ -252,7 +257,8 @@ function UsarEfeito({ efeito, indice, uso, fechar, estado, heroi, agir }: PropsA
       {uso.nota ? <p className="nota-resultado">{uso.nota}</p> : null}
       {quem ? <SeletorAlvos estado={estado} quem={quem} max={uso.maxAlvos ?? (uso.alvo === 'inimigo' || uso.alvo === 'aliado' ? 1 : 0)} escolhidos={alvos} mudar={setAlvos} eu={heroi?.id} /> : null}
       <div className="acoes-folha">
-        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || (Boolean(quem) && !alvos.length)} onClick={usar}>
+        {bloqueio ? <p className="aviso-bloqueio">{bloqueio}</p> : null}
+        <button type="button" className="j-btn ouro largo rolar-grande" disabled={enviando || (Boolean(quem) && !alvos.length) || Boolean(bloqueio)} onClick={usar}>
           <Icone nome="raio" />{enviando ? 'Usando…' : 'Usar (sem PM)'}
         </button>
       </div>

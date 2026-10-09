@@ -271,6 +271,16 @@ function PainelMestre({ info }: { info: InfoServidor }) {
             <>
               <Botao classe="icone" icone="anterior" title="Turno anterior" onClick={() => enviar({ tipo: 'turno', acao: 'anterior' })} />
               <span className="rodada-m">Rodada<b>{t.rodada}</b></span>
+              {estado.opcoes.acaoSoNaVez && estado.aliados.some((h) => h.id === t.atual) ? (
+                <button
+                  type="button"
+                  className={`gasto-m ${t.gasto?.padrao || t.gasto?.movimento ? 'usado' : ''}`}
+                  title="Ações que o herói da vez já gastou. Clique para devolver (engano, poder que dá ação extra)."
+                  onClick={() => enviar({ tipo: 'turno', acao: 'liberarAcoes' })}
+                >
+                  <i className={t.gasto?.padrao ? 'x' : ''}>P</i><i className={t.gasto?.movimento ? 'x' : ''}>M</i>
+                </button>
+              ) : null}
               <button type="button" className="btn ouro proximo" title="Próximo turno (N)" onClick={() => enviar({ tipo: 'turno', acao: 'proximo' })}>
                 <span>Próximo</span><Icone nome="proximo" />
               </button>
@@ -334,8 +344,8 @@ function PainelMestre({ info }: { info: InfoServidor }) {
                 <Icone nome="arquivo" />Restaurar backup…
               </button>
               <hr />
-              <button onClick={() => { setMenuAberto(false); if (confirm('Voltar ao grupo de exemplo? (dá para desfazer)')) enviar({ tipo: 'reiniciar' }); }}>
-                <Icone nome="reiniciar" />Reiniciar grupo de exemplo
+              <button onClick={() => { setMenuAberto(false); if (confirm('Limpar a mesa? Tira todos os heróis, inimigos e efeitos (as fichas e o bestiário ficam). Dá para desfazer.')) enviar({ tipo: 'reiniciar' }); }}>
+                <Icone nome="reiniciar" />Limpar a mesa
               </button>
             </div>
           </details>

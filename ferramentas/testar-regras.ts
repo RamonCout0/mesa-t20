@@ -1,10 +1,10 @@
 // Roteiro rapido do motor de regras: node ferramentas/testar-regras.ts <pdf de arcanista do Nimb ou data/fichas/<id>.json>
 import fs from 'node:fs';
-import { estadoDemo, buscar, tirarEfeitos } from '../src/server/estado.ts';
+import { estadoVazio, criar, buscar, tirarEfeitos } from '../src/server/estado.ts';
 import { importarPdfNimb } from '../src/server/importar-nimb.ts';
-import { resolverAtaque, resolverMagia, resolverPoder, iniciarTurno, aplicarDano, type Contexto } from '../src/server/regras.ts';
+import { resolverAtaque, resolverMagia, resolverPoder, iniciarTurno, aplicarDano, gastarAcaoAvulsa, resolverHabilidade, resultadoPublico, type Contexto } from '../src/server/regras.ts';
 import type { Ficha } from '../src/shared/ficha.ts';
-import type { Heroi } from '../src/shared/tipos.ts';
+import type { Heroi, Inimigo } from '../src/shared/tipos.ts';
 
 let falhas = 0;
 const confere = (nome: string, ok: boolean, detalhe = '') => { if (!ok) falhas += 1; console.log(ok ? 'ok   ' : 'FALHA', nome, detalhe); };
@@ -14,7 +14,22 @@ const dados = process.argv[2].endsWith('.json')
   ? JSON.parse(fs.readFileSync(process.argv[2], 'utf8'))
   : (await importarPdfNimb(new Uint8Array(fs.readFileSync(process.argv[2])))).ficha;
 const ficha = { ...dados, id: 'f1', codigo: 'TESTE1', criadaEm: 0, atualizadaEm: 0 } as Ficha;
-const estado = estadoDemo();
+// O roteiro usa estas magias: qualquer ficha serve (vira um conjurador de nivel 5 que as conhece).
+ficha.nivel = 5;
+ficha.atributoChave ??= 'int';
+ficha.magias = [...new Set([...ficha.magias, 'relampago', 'raio-do-enfraquecimento', 'teia'])];
+// Mesa de teste: dois herois e um dragao com dois cultistas (a mesa real comeca vazia).
+const estado = estadoVazio();
+estado.aliados.push(
+  criar('aliados', { nome: 'Aldric', classe: 'Guerreiro', nivel: 5, pvMax: 62, pmMax: 15, defesa: 24 }) as Heroi,
+  criar('aliados', { nome: 'Lyra', classe: 'Arcanista', nivel: 5, pvMax: 31, pmMax: 34, defesa: 17 }) as Heroi,
+);
+const cultistaBase = { naTela: true, subtitulo: 'Fanático', nd: 'ND 2', pvMax: 28, defesa: 14, fort: 7, ref: 5, von: 9, ataques: [{ nome: 'Adaga ritual', bonus: 10, dano: '1d4+6', tipoDano: 'perfuracao', margem: 19, mult: 2, arquetipo: 'perfuracao' }] };
+estado.inimigos.push(
+  criar('inimigos', { nome: 'Ignarax', nd: 'ND 9', pvMax: 320, defesa: 28, fort: 21, ref: 15, von: 9, imunidades: ['fogo'] }) as Inimigo,
+  criar('inimigos', { nome: 'Cultista das Cinzas', ...cultistaBase }) as Inimigo,
+  criar('inimigos', { nome: 'Cultista das Cinzas 2', ...cultistaBase }) as Inimigo,
+);
 const heroi = estado.aliados[1] as Heroi; // Lyra vira a ficha importada
 Object.assign(heroi, { fichaId: 'f1', nome: ficha.nome, pvMax: ficha.pvMax, pv: ficha.pvMax, pmMax: ficha.pmMax, pm: ficha.pmMax, nivel: ficha.nivel });
 
@@ -127,6 +142,36 @@ const vivo = estado.inimigos.find((i) => i.pv > 0 && i.naTela)!;
 fila = [10, 1];
 const atq = resolverAtaque(ctx, heroi.id, ficha.ataques[0], vivo.id, {}, true);
 confere('furia soma no ataque', atq.rolagens[0].bonus === ficha.ataques[0].bonus + 2, `bonus ${atq.rolagens[0].bonus}`);
+
+// 11) Vez na iniciativa: fora dela so reacao; na vez, padrao + movimento
+const tenta = (f: () => unknown) => { try { f(); return ''; } catch (e) { return (e as Error).message; } };
+Object.assign(heroi, { pm: heroi.pmMax, pv: heroi.pvMax, condicoes: [] });
+estado.opcoes.acaoSoNaVez = true;
+Object.assign(estado.turnos, { ativo: true, atual: estado.aliados[0].id, gasto: { padrao: false, movimento: false } });
+fila = [10, 1];
+confere('fora da vez: ataque recusado', /Não é a sua vez/.test(tenta(() => resolverAtaque(ctx, heroi.id, ficha.ataques[0], vivo.id, {}, true))));
+ficha.poderes = [...ficha.poderes, { nome: 'Escudo Divino', texto: 'Como uma reação, você protege um aliado.', pm: 1, bonus: { defesa: 2 } }];
+confere('fora da vez: reação passa', tenta(() => resolverPoder(ctx, heroi.id, ficha.poderes.length - 1, [], true)) === '');
+estado.turnos.atual = heroi.id;
+fila = [10, 1, 10, 1];
+confere('na vez: primeiro ataque passa', tenta(() => resolverAtaque(ctx, heroi.id, ficha.ataques[0], vivo.id, {}, true)) === '');
+confere('na vez: segundo ataque (padrão gasta) recusado', /ação padrão/.test(tenta(() => resolverAtaque(ctx, heroi.id, ficha.ataques[0], vivo.id, {}, true))));
+confere('movimento ainda livre', tenta(() => gastarAcaoAvulsa(estado, heroi.id, 'movimento')) === '' && estado.turnos.gasto.movimento);
+confere('sem ações sobrando', /já usou/.test(tenta(() => gastarAcaoAvulsa(estado, heroi.id, 'movimento'))));
+estado.turnos.ativo = false;
+
+// 12) Habilidade de inimigo: gasta PM, dano com teste; so anunciar nao mexe em ninguem
+const dragao = estado.inimigos[0];
+Object.assign(dragao, { pmMax: 20, pm: 20 });
+Object.assign(heroi, { pv: heroi.pvMax, condicoes: [] });
+fila = [2, 2, 1];
+r = resolverHabilidade(ctx, dragao.id, { nome: 'Sopro', dano: '2d6', tipoDano: 'fogo', res: 'ref', cd: 30, sucesso: 'metade', condicoes: ['cego:2'], pm: 5, alvo: 'inimigos' }, [heroi.id]);
+confere('habilidade gasta PM do inimigo', dragao.pm === 15, `${dragao.pm}`);
+confere('habilidade com teste aplica dano e condição', r.alvos[0].dano === 4 && heroi.condicoes.includes('cego'), r.texto);
+r = resolverHabilidade(ctx, dragao.id, { nome: 'Aura', alvo: 'nenhum', texto: 'segredo' }, []);
+confere('só anunciar: sem alvos', r.alvos.length === 0 && r.nota === 'segredo', r.texto);
+confere('jogadores não veem a descrição', resultadoPublico(estado, r)?.nota === undefined);
+confere('PM insuficiente recusado', /tem só/.test(tenta(() => resolverHabilidade(ctx, dragao.id, { nome: 'X', pm: 99, alvo: 'nenhum' }, []))));
 
 console.log(falhas ? `${falhas} falha(s)` : 'tudo certo');
 process.exit(falhas ? 1 : 0);

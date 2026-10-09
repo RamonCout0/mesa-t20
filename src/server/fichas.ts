@@ -11,6 +11,7 @@ import { baseHeroi, novoId, num, txt, imagemValida, validarAtaques } from './est
 import { buscarMagia } from '../shared/magias.ts';
 import { CONDICAO_POR_ID } from '../shared/condicoes.ts';
 import { DADOS_3D } from '../shared/dados-3d.ts';
+import { EXECUCOES, type Execucao } from '../shared/execucao.ts';
 
 // Sem letras que confundem (0/O, 1/I/L) para quem digitar o codigo.
 const ALFABETO = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -67,18 +68,35 @@ export class Fichas {
     return f;
   }
 
-  /** Reimportar o PDF atualiza a ficha mas preserva o que o jogador escolheu na mesa. */
+  /** Ficha com o mesmo nome de personagem (para reimportar o PDF do Nimb sem duplicar). */
+  porNome(nome: string) {
+    const alvo = nome.trim().toLowerCase();
+    return [...this.todas.values()].find((f) => f.nome.trim().toLowerCase() === alvo);
+  }
+
+  /**
+   * Reimportar o PDF (o personagem subiu de nivel, pegou arma nova...) atualiza a ficha mas preserva o
+   * que foi feito na mesa: aparencia, notas, magias proprias, itens e o ajuste dos poderes (PM, efeito,
+   * execucao). Devolve a ficha nova e o que mudou, para avisar quem importou.
+   */
   substituir(id: string, dados: Omit<Ficha, 'id' | 'codigo' | 'criadaEm' | 'atualizadaEm'>) {
     const atual = this.exigir(id);
+    const ajustados = new Map(atual.poderes.filter((p) => p.pm || p.efeito || p.bonus || p.execucao).map((p) => [p.nome.toLowerCase(), p]));
+    const poderes = dados.poderes.map((p) => {
+      const a = ajustados.get(p.nome.toLowerCase());
+      return a ? { ...p, pm: a.pm, efeito: a.efeito, bonus: a.bonus, execucao: a.execucao } : p;
+    });
+    // Poderes criados na mesa (regras da casa) que o PDF nao tem continuam.
+    const daCasa = atual.poderes.filter((p) => !dados.poderes.some((x) => x.nome.toLowerCase() === p.nome.toLowerCase()) && (p.pm || p.efeito || p.bonus));
     const f: Ficha = {
       ...dados,
-      id: atual.id, codigo: atual.codigo, criadaEm: atual.criadaEm, atualizadaEm: atual.atualizadaEm,
-      jogador: atual.jogador, imagem: atual.imagem, cor: atual.cor, dado: atual.dado, notas: atual.notas,
+      id: atual.id, codigo: atual.codigo, criadaEm: atual.criadaEm, atualizadaEm: Date.now(),
+      jogador: atual.jogador || dados.jogador, imagem: atual.imagem, cor: atual.cor, dado: atual.dado, notas: atual.notas,
       // O que foi criado aqui na mesa nao existe no PDF: continua.
-      magiasProprias: atual.magiasProprias, itens: atual.itens,
+      magiasProprias: atual.magiasProprias, itens: atual.itens, poderes: [...poderes, ...daCasa],
     };
     this.gravar(f);
-    return f;
+    return { ficha: f, mudancas: diferencas(atual, f) };
   }
 
   exigir(id: string) {
@@ -199,7 +217,7 @@ const expressao = (v: unknown) => {
 };
 
 /** Poderes e itens: nome e texto; os usaveis tambem tem custo, efeito na mesa e bonus enquanto ativos. */
-function textos(v: unknown, max: number): Poder[] {
+export function textos(v: unknown, max: number): Poder[] {
   return lista(v, max).map((p) => {
     const pm = num(p?.pm, 0, 30);
     const b = (p?.bonus ?? {}) as Record<string, unknown>;
@@ -208,6 +226,7 @@ function textos(v: unknown, max: number): Poder[] {
     return {
       nome: txt(p?.nome, 60), texto: txt(p?.texto, 2000),
       ...(pm ? { pm } : {}),
+      ...((EXECUCOES as string[]).includes(String(p?.execucao)) ? { execucao: p.execucao as Execucao } : {}),
       ...(p?.efeito ? { efeito: validarEfeito(p.efeito) } : {}),
       ...(temBonus ? { bonus } : {}),
     };
@@ -236,7 +255,7 @@ function validarEfeito(bruto: unknown): MagiaPropria['efeito'] {
   };
 }
 
-function magiaPropria(v: Record<string, unknown>): MagiaPropria | null {
+export function magiaPropria(v: Record<string, unknown>): MagiaPropria | null {
   const nome = txt(v?.nome, 50);
   if (!nome) return null;
   const id = /^propria-[\w-]{1,40}$/.test(String(v.id)) ? String(v.id) : `propria-${novoId()}`;
@@ -314,3 +333,26 @@ const ATRIBUTO_DA_PERICIA: Record<string, Atributo> = {
   'Ofício 1': 'int', 'Ofício 2': 'int', 'Percepção': 'sab', Pilotagem: 'des', Pontaria: 'des', Reflexos: 'des', 'Religião': 'sab',
   'Sobrevivência': 'sab', Vontade: 'sab',
 };
+
+/** O que mudou entre duas versoes da ficha, em frases curtas ("Nível 5 → 6", "Nova arma: Arco longo"). */
+export function diferencas(antes: Ficha, depois: Ficha): string[] {
+  const m: string[] = [];
+  const num = (rotulo: string, a: number, b: number) => { if (a !== b) m.push(`${rotulo} ${a} → ${b}`); };
+  num('Nível', antes.nivel, depois.nivel);
+  num('PV', antes.pvMax, depois.pvMax);
+  num('PM', antes.pmMax, depois.pmMax);
+  num('Defesa', antes.defesa, depois.defesa);
+  for (const a of ATRIBUTOS) num(a.charAt(0).toUpperCase() + a.slice(1), antes.atributos[a], depois.atributos[a]);
+  const novos = (rotulo: string, a: string[], b: string[]) => {
+    const velhos = new Set(a.map((x) => x.toLowerCase()));
+    const add = b.filter((x) => !velhos.has(x.toLowerCase()));
+    const saiu = a.filter((x) => !b.some((y) => y.toLowerCase() === x.toLowerCase()));
+    if (add.length) m.push(`${rotulo} nov${add.length > 1 ? 'as' : 'a'}: ${add.join(', ')}`);
+    if (saiu.length) m.push(`${rotulo} que saíram: ${saiu.join(', ')}`);
+  };
+  novos('Arma', antes.ataques.map((x) => x.nome), depois.ataques.map((x) => x.nome));
+  const nomeMagia = (id: string) => buscarMagia(id)?.nome ?? id;
+  novos('Magia', [...antes.magias.map(nomeMagia), ...antes.magiasExtras], [...depois.magias.map(nomeMagia), ...depois.magiasExtras]);
+  novos('Poder', antes.poderes.map((x) => x.nome), depois.poderes.map((x) => x.nome));
+  return m;
+}

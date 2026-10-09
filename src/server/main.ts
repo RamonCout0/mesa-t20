@@ -12,7 +12,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  carregar, salvar, executar, estadoDemo, migrar, visaoPublica, filtrarEvento, ganchosDeTurno, ACAO_SEM_HISTORICO, tirarEfeitos, type Acao,
+  carregar, salvar, executar, estadoVazio, migrar, visaoPublica, filtrarEvento, ganchosDeTurno, ACAO_SEM_HISTORICO, tirarEfeitos, type Acao,
 } from './estado.ts';
 import { responder, lerBinario, lerJson, type Req, type Res } from './http.ts';
 import {
@@ -27,9 +27,11 @@ import { Segredos, urlImagemSegredo } from './segredos.ts';
 import { Salvos, agruparInimigos, restaurarSalvos } from './salvos.ts';
 import { ameacasDoLivro, dadosDaAmeaca, linhasDoPdf } from './bestiario-livro.ts';
 import { importarPdfNimb } from './importar-nimb.ts';
+import { expressaoValida } from '../shared/rolagem.ts';
+import { Casa, TIPOS_CASA, type TipoCasa } from './casa.ts';
 import {
   iniciarTurno, encerrarCena, resolverAtaque, resolverMagia, resolverUso, resolverRolagem,
-  resolverHabilidade, resolverPoder, resolverSangramento, resolverTeste, resultadoPublico, type Contexto,
+  resolverHabilidade, resolverPoder, resolverSangramento, resolverTeste, resultadoPublico, gastarAcaoAvulsa, type Contexto,
 } from './regras.ts';
 import type { ResultadoAcao } from '../shared/acoes.ts';
 import type { Heroi, Ataque } from '../shared/tipos.ts';
@@ -61,7 +63,15 @@ function guardarFoto(foto: string, acaoId?: string) {
 criarPastas(RAIZ);
 const fichas = new Fichas(RAIZ);
 const bestiario = new Bestiario(RAIZ);
+// Cartas postas na mesa antes das habilidades completas: pega do bestiario (mantendo os chips ativos).
+for (const i of estado.inimigos) {
+  const a = i.ameacaId ? bestiario.porId(i.ameacaId) : undefined;
+  if (!a || i.habilidades.some((h) => h.texto)) continue;
+  const ativas = new Set(i.habilidades.filter((h) => h.ativa).map((h) => h.nome));
+  i.habilidades = [...a.habilidades.map((h) => ({ ...h, ativa: ativas.has(h.nome) || h.ativa })), ...i.habilidades.filter((h) => !a.habilidades.some((x) => x.nome === h.nome))];
+}
 const segredos = new Segredos(RAIZ);
+const casa = new Casa(RAIZ);
 const salvos = new Salvos(RAIZ);
 // Inicio de turno: conta as rodadas e, se o heroi estiver sangrando, rola o teste de Constituicao.
 // O resultado fica pendente e e publicado junto com o estado novo.
@@ -196,8 +206,9 @@ function aplicarAcao(acao: Acao): Evento[] {
     return [];
   }
   if (acao.tipo === 'reiniciar') {
+    // Limpa a mesa (herois, inimigos, efeitos, cena). Fichas, bestiario e opcoes continuam.
     guardarFoto(JSON.stringify(estado));
-    estado = estadoDemo();
+    estado = { ...estadoVazio(), opcoes: estado.opcoes };
     return [];
   }
   const foto = JSON.stringify(estado);
@@ -234,14 +245,15 @@ const contexto = (): Contexto => ({
   fichaDe: (h: Heroi) => (h.fichaId ? fichas.porId(h.fichaId) : undefined),
 });
 
-function ataqueDe(autorId: string, ataqueId: unknown, avulso: unknown): Ataque {
+function ataqueDe(autorId: string, ataqueId: unknown, avulso: unknown, ehJogador: boolean): Ataque {
   const h = estado.aliados.find((x) => x.id === autorId);
   const lista = h ? (h.fichaId ? fichas.porId(h.fichaId)?.ataques : undefined) ?? [] : estado.inimigos.find((x) => x.id === autorId)?.ataques ?? [];
   const achado = lista.find((a) => a.id === ataqueId);
   if (achado) return achado;
-  // Ataque avulso digitado pelo mestre (inimigo sem ficha completa).
+  // Ataque avulso digitado pelo mestre (inimigo sem ficha completa). O celular so usa os da ficha.
   const a = (avulso ?? {}) as Partial<Ataque>;
-  if (!a.dano) throw new Error('Ataque não encontrado.');
+  if (ehJogador || !a.dano) throw new Error('Ataque não encontrado na ficha.');
+  if (!expressaoValida(String(a.dano))) throw new Error('Dano inválido.');
   return {
     id: 'avulso', nome: String(a.nome ?? 'Ataque').slice(0, 40), bonus: Math.trunc(Number(a.bonus) || 0), dano: String(a.dano),
     tipoDano: a.tipoDano ?? '', margem: Math.min(20, Math.max(2, Number(a.margem) || 20)), mult: Math.min(6, Math.max(2, Number(a.mult) || 2)),
@@ -256,7 +268,7 @@ function resolverPeloMotor(a: Acao, ehJogador: boolean, autorForcado?: string): 
   const autorId = autorForcado ?? String(a.autorId ?? '');
   let r: ResultadoAcao;
   if (a.tipo === 'atacar' || a.tipo === 'atacarComo') {
-    r = resolverAtaque(ctx, autorId, ataqueDe(autorId, a.ataqueId, a.ataque), String(a.alvoId ?? ''), (a.extras ?? {}) as Record<string, never>, ehJogador);
+    r = resolverAtaque(ctx, autorId, ataqueDe(autorId, a.ataqueId, a.ataque, ehJogador), String(a.alvoId ?? ''), (a.extras ?? {}) as Record<string, never>, ehJogador);
   } else if (a.tipo === 'magia' || a.tipo === 'magiaComo') {
     r = resolverMagia(ctx, autorId, { magiaId: String(a.magiaId ?? ''), alvos: (a.alvos as string[]) ?? [], aprimoramentos: (a.aprimoramentos ?? {}) as Record<string, number> }, ehJogador);
   } else if (a.tipo === 'usar' || a.tipo === 'usarComo') {
@@ -312,8 +324,22 @@ async function tratarAcaoJogador(req: Req, res: Res, url: URL) {
       depoisDeMexerNaMesa();
       return responder(res, 200, { ok: true });
     }
-    if (!['atacar', 'magia', 'usar', 'rolar', 'responderTeste', 'poder'].includes(a.tipo)) throw new Error('Ação desconhecida.');
     const heroiId = heroiIdDaFicha(f.id);
+    if (a.tipo === 'gastarAcao' || a.tipo === 'passarVez') {
+      if (!heroiId) throw new Error('Seu personagem não está na mesa.');
+      const foto = JSON.stringify(estado);
+      if (a.tipo === 'gastarAcao') gastarAcaoAvulsa(estado, heroiId, a.execucao === 'padrao' ? 'padrao' : 'movimento');
+      else {
+        if (!estado.turnos.ativo || estado.turnos.atual !== heroiId) throw new Error('Não é a sua vez.');
+        executar(estado, { tipo: 'turno', acao: 'proximo' });
+      }
+      guardarFoto(foto);
+      salvar(ARQUIVO_ESTADO, estado);
+      for (const r of resultadosDoTurno.splice(0)) registrarResultado(r);
+      transmitir();
+      return responder(res, 200, { ok: true });
+    }
+    if (!['atacar', 'magia', 'usar', 'rolar', 'responderTeste', 'poder'].includes(a.tipo)) throw new Error('Ação desconhecida.');
     if (!heroiId) throw new Error('Seu personagem não está na mesa. Peça ao mestre para colocá-lo.');
     const r = resolverPeloMotor(a, true, heroiId);
     // Sem telao aberto, o celular nao espera a animacao para mostrar o resultado.
@@ -420,10 +446,13 @@ async function tratarImportacao(req: Req, res: Res, url: URL) {
     const { ficha: dados, avisos } = await lerPdfDoPedido(req);
     const atual = url.searchParams.get('substituir');
     let f: Ficha;
-    if (atual) {
-      const dono = mestre ? fichas.porId(atual) : jogadorDe(req, url);
-      if (!dono || dono.id !== atual) throw new Error('Você só pode atualizar a sua própria ficha.');
-      f = fichas.substituir(dono.id, dados);
+    let mudancas: string[] | null = null;
+    // Mestre importando o PDF de um personagem que ja tem ficha (mesmo nome): atualiza em vez de duplicar.
+    const mesmoNome = !atual && mestre && url.searchParams.get('nova') !== '1' ? fichas.porNome(dados.nome) : undefined;
+    if (atual || mesmoNome) {
+      const dono = mesmoNome ?? (mestre ? fichas.porId(atual!) : jogadorDe(req, url));
+      if (!dono || (!mesmoNome && dono.id !== atual)) throw new Error('Você só pode atualizar a sua própria ficha.');
+      ({ ficha: f, mudancas } = fichas.substituir(dono.id, dados));
     } else {
       f = fichas.criar(dados);
     }
@@ -433,7 +462,7 @@ async function tratarImportacao(req: Req, res: Res, url: URL) {
     else colocarNaMesa(estado, f);
     depoisDeMexerNaMesa();
     transmitirFichas();
-    return responder(res, 200, { ok: true, codigo: f.codigo, id: f.id, avisos });
+    return responder(res, 200, { ok: true, codigo: f.codigo, id: f.id, avisos, atualizada: Boolean(mudancas), mudancas: mudancas ?? [] });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
   }
@@ -628,7 +657,7 @@ async function tratarLivro(req: Req, res: Res, url: URL) {
 function tratarBackup(req: Req, res: Res, url: URL) {
   if (!ehMestre(req, url)) return responder(res, 403, { ok: false, erro: 'Somente o mestre pode fazer isso.' });
   if (req.method === 'GET') {
-    const dados = { app: 'mesa-t20', versao: 1, criadoEm: Date.now(), estado, fichas: fichas.lista(), bestiario: bestiario.lista(), ...salvos.tudo() };
+    const dados = { app: 'mesa-t20', versao: 1, criadoEm: Date.now(), estado, fichas: fichas.lista(), bestiario: bestiario.lista(), casa: casa.dados, ...salvos.tudo() };
     res.writeHead(200, {
       'Content-Type': 'application/json; charset=utf-8',
       'Content-Disposition': `attachment; filename="mesa-t20-backup-${new Date().toISOString().slice(0, 10)}.json"`,
@@ -648,6 +677,8 @@ async function restaurarBackup(req: Req, res: Res, url: URL) {
     let nAmeacas = 0;
     for (const a of listaDe(b.bestiario)) { try { bestiario.restaurar(a); nAmeacas += 1; } catch { /* idem */ } }
     const nSalvos = restaurarSalvos(salvos, b as { encontros?: unknown; cenas?: unknown });
+    const doBackup = (b.casa ?? {}) as Partial<Record<TipoCasa, unknown[]>>;
+    for (const tipo of TIPOS_CASA) for (const x of doBackup[tipo] ?? []) { try { casa.guardar(tipo, x); } catch { /* item estragado: pula */ } }
     let mesa = false;
     if (url.searchParams.get('mesa') === '1' && b.estado) {
       const e = migrar(b.estado);
@@ -661,6 +692,27 @@ async function restaurarBackup(req: Req, res: Res, url: URL) {
     transmitirFichas();
     for (const c of clientes) if (c.visao === 'mestre') { enviar(c, 'bestiario', bestiario.lista()); enviar(c, 'salvos', salvos.tudo()); }
     return responder(res, 200, { ok: true, fichas: nFichas, ameacas: nAmeacas, salvos: nSalvos, mesa });
+  } catch (erro) {
+    return responder(res, 400, { ok: false, erro: (erro as Error).message });
+  }
+}
+
+// ---------------- biblioteca da casa ----------------
+
+/** Itens, poderes e magias da casa: todos leem (para pôr na ficha), so o mestre guarda e tira. */
+async function tratarCasa(req: Req, res: Res, url: URL) {
+  const mestre = ehMestre(req, url);
+  if (!mestre && !jogadorDe(req, url)) return responder(res, 401, { ok: false, erro: 'Código inválido.' });
+  try {
+    if (req.method === 'GET') return responder(res, 200, { ok: true, casa: casa.dados });
+    if (!mestre) throw new Error('Só o mestre mexe na biblioteca da casa.');
+    const a = await lerJson(req);
+    const tipo = String(a.tipo) as TipoCasa;
+    let resultado = '';
+    if (a.acao === 'guardar') resultado = casa.guardar(tipo, a.item);
+    else if (a.acao === 'remover') casa.remover(tipo, String(a.nome ?? ''));
+    else throw new Error('Ação desconhecida.');
+    return responder(res, 200, { ok: true, resultado, casa: casa.dados });
   } catch (erro) {
     return responder(res, 400, { ok: false, erro: (erro as Error).message });
   }
@@ -887,6 +939,7 @@ const servidor = http.createServer((req, res) => {
   if (rota === '/api/mestre/segredo' && req.method === 'POST') return tratarSegredoMestre(req, res, url);
   if (rota === '/api/mestre/salvos' && req.method === 'POST') return tratarSalvos(req, res, url);
   if (rota === '/api/mestre/backup') return tratarBackup(req, res, url);
+  if (rota === '/api/casa') return tratarCasa(req, res, url);
   if (rota === '/api/mestre/segredo/imagem' && req.method === 'POST') return tratarImagemSegredo(req, res, url);
   if (rota === '/api/jogador/segredo' && req.method === 'POST') return tratarSegredoJogador(req, res, url);
   const imgSegredo = /^\/api\/segredo\/([\w-]+)\/imagem$/.exec(rota);
